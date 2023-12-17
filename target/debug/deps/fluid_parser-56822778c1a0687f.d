@@ -1,0 +1,11 @@
+D:\OpenBattlesimGen\target\debug\deps\fluid_parser-56822778c1a0687f.rmeta: C:\Users\Usuario\.cargo\registry\src\index.crates.io-6f17d22bba15001f\fluid-parser-0.1.14\src\lib.rs C:\Users\Usuario\.cargo\registry\src\index.crates.io-6f17d22bba15001f\fluid-parser-0.1.14\src\ast.rs C:\Users\Usuario\.cargo\registry\src\index.crates.io-6f17d22bba15001f\fluid-parser-0.1.14\src\lexer.rs C:\Users\Usuario\.cargo\registry\src\index.crates.io-6f17d22bba15001f\fluid-parser-0.1.14\src\parser.rs C:\Users\Usuario\.cargo\registry\src\index.crates.io-6f17d22bba15001f\fluid-parser-0.1.14\src\token.rs
+
+D:\OpenBattlesimGen\target\debug\deps\libfluid_parser-56822778c1a0687f.rlib: C:\Users\Usuario\.cargo\registry\src\index.crates.io-6f17d22bba15001f\fluid-parser-0.1.14\src\lib.rs C:\Users\Usuario\.cargo\registry\src\index.crates.io-6f17d22bba15001f\fluid-parser-0.1.14\src\ast.rs C:\Users\Usuario\.cargo\registry\src\index.crates.io-6f17d22bba15001f\fluid-parser-0.1.14\src\lexer.rs C:\Users\Usuario\.cargo\registry\src\index.crates.io-6f17d22bba15001f\fluid-parser-0.1.14\src\parser.rs C:\Users\Usuario\.cargo\registry\src\index.crates.io-6f17d22bba15001f\fluid-parser-0.1.14\src\token.rs
+
+D:\OpenBattlesimGen\target\debug\deps\fluid_parser-56822778c1a0687f.d: C:\Users\Usuario\.cargo\registry\src\index.crates.io-6f17d22bba15001f\fluid-parser-0.1.14\src\lib.rs C:\Users\Usuario\.cargo\registry\src\index.crates.io-6f17d22bba15001f\fluid-parser-0.1.14\src\ast.rs C:\Users\Usuario\.cargo\registry\src\index.crates.io-6f17d22bba15001f\fluid-parser-0.1.14\src\lexer.rs C:\Users\Usuario\.cargo\registry\src\index.crates.io-6f17d22bba15001f\fluid-parser-0.1.14\src\parser.rs C:\Users\Usuario\.cargo\registry\src\index.crates.io-6f17d22bba15001f\fluid-parser-0.1.14\src\token.rs
+
+C:\Users\Usuario\.cargo\registry\src\index.crates.io-6f17d22bba15001f\fluid-parser-0.1.14\src\lib.rs:
+C:\Users\Usuario\.cargo\registry\src\index.crates.io-6f17d22bba15001f\fluid-parser-0.1.14\src\ast.rs:
+C:\Users\Usuario\.cargo\registry\src\index.crates.io-6f17d22bba15001f\fluid-parser-0.1.14\src\lexer.rs:
+C:\Users\Usuario\.cargo\registry\src\index.crates.io-6f17d22bba15001f\fluid-parser-0.1.14\src\parser.rs:
+C:\Users\Usuario\.cargo\registry\src\index.crates.io-6f17d22bba15001f\fluid-parser-0.1.14\src\token.rs:

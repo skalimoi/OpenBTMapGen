@@ -1,0 +1,322 @@
+# data file for the Fltk User Interface Designer (fluid)
+version 1.0400
+header_name {.h}
+code_name {.cxx}
+class UserInterface {open
+} {
+  Function {make_window()} {open
+  } {
+    Fl_Window main_window {
+      label {OpenBattlesim Map Generator} open
+      xywh {877 258 870 579} type Double visible
+    } {
+      Fl_Menu_Bar menu_bar {open
+        xywh {0 0 870 30}
+      } {
+        Submenu file_toolbar_submenu {
+          label File open
+          xywh {0 0 62 20}
+        } {
+          MenuItem open_scen_button {
+            label {Open Scenario...}
+            xywh {0 0 30 20}
+          }
+          MenuItem save_scen_button {
+            label {Save Scenario}
+            xywh {0 0 30 20}
+          }
+          MenuItem save_scen_as_button {
+            label {Save Scenario as...}
+            xywh {0 0 30 20}
+          }
+        }
+        Submenu edit_toolbar_submenu {
+          label Edit open
+          xywh {0 0 62 20}
+        } {
+          MenuItem set_scen_params {
+            label {Set Scenario Parameters...}
+            xywh {0 0 30 20}
+          }
+        }
+      }
+      Fl_Tabs {} {open
+        xywh {-3 29 898 567}
+      } {
+        Fl_Group preview_pane {
+          label Preview open
+          xywh {0 60 870 520} hide resizable
+        } {
+          Fl_Group final_preview_box {
+            label {Final preview} open
+            xywh {14 80 841 475} box THIN_DOWN_FRAME color 32 resizable
+          } {
+            Fl_Scrollbar preview_scroll_v {
+              xywh {835 80 20 455}
+            }
+            Fl_Scrollbar preview_scroll_h {
+              xywh {15 535 820 20} type Horizontal
+            }
+          }
+        }
+        Fl_Group topography_pane {
+          label Topography open
+          xywh {0 55 870 525}
+        } {
+          Fl_Group first_group {open
+            xywh {0 60 760 520} box BORDER_BOX
+          } {
+            Fl_Output console_output_ero {
+              xywh {260 81 310 485} resizable
+            }
+          }
+          Fl_Group topo_menu_box {open
+            xywh {585 55 285 525} box FLAT_BOX align 192
+          } {
+            Fl_Input seed_input {
+              label {Seed:}
+              xywh {630 56 165 24}
+            }
+            Fl_Button seed_random_button {
+              label Random
+              xywh {800 55 64 25} box GTK_UP_BOX down_box GTK_DOWN_BOX
+            }
+            Fl_Button erode_terrain_button {
+              label {Erode terrain}
+              xywh {595 535 265 25} box THIN_UP_BOX down_box THIN_DOWN_BOX color 247 selection_color 247
+            }
+          }
+          Fl_Group noise_opts_group {open
+            xywh {595 95 265 175} box BORDER_FRAME color 37
+          } {
+            Fl_Choice noise_choice {
+              label {Noise type:} open
+              xywh {719 120 95 25} down_box BORDER_BOX
+            } {}
+            Fl_Input noise_octaves_input {
+              label {Octaves:}
+              xywh {720 155 95 25}
+            }
+            Fl_Input noise_freq_input {
+              label {Frequency:}
+              xywh {720 190 95 25}
+            }
+            Fl_Input noise_lacunarity_input {
+              label {Lacunarity:}
+              xywh {720 226 95 25}
+            }
+          }
+          Fl_Box {} {
+            label {Noise settings}
+            xywh {596 85 110 25} box FLAT_BOX
+          }
+          Fl_Group terrain_settings_box {open
+            xywh {595 285 265 170} box BORDER_FRAME color 37
+          } {
+            Fl_Value_Slider high_elev_slider {
+              label {Mountain %}
+              xywh {615 315 225 20} type {Horz Knob} box THIN_DOWN_BOX align 1 maximum 100 step 1 textsize 14
+            }
+            Fl_Value_Slider sea_elev_slider {
+              label {Sea level %}
+              xywh {615 356 225 21} type {Horz Knob} box THIN_DOWN_BOX align 1 maximum 100 step 1 textsize 14
+            }
+            Fl_Value_Input min_height_input {
+              label {Minimum height (m)}
+              xywh {740 388 80 25}
+            }
+            Fl_Value_Input max_height_input {
+              label {Maximum height (m)}
+              xywh {740 420 80 25}
+            }
+          }
+          Fl_Box {} {
+            label {Terrain settings}
+            xywh {596 271 110 25} box FLAT_BOX
+          }
+          Fl_Group erosion_opts_box {open
+            xywh {595 465 265 55} box BORDER_FRAME color 37
+          } {
+            Fl_Value_Input erosion_cycles_input {
+              label {Cycles:}
+              xywh {660 486 65 24}
+            }
+          }
+          Fl_Box {} {
+            label {Erosion settings}
+            xywh {595 455 110 25} box FLAT_BOX
+          }
+          Fl_Group topo_preview {
+            label {Original Preview} open
+            xywh {15 80 230 230} box ENGRAVED_FRAME color 0 labelcolor 8 align 193
+          } {}
+          Fl_Group topo_ero_preview {
+            label {Erosion Preview} open
+            xywh {15 335 230 230} box ENGRAVED_FRAME color 0 labelcolor 8
+          } {}
+          Fl_Box preview_box_topo {selected
+            xywh {15 80 230 230}
+          }
+        }
+        Fl_Group hydrography_pane {
+          label Hydrography
+          xywh {0 60 895 520} hide
+        } {
+          Fl_Group {} {open
+            xywh {0 60 870 520} box BORDER_BOX
+          } {}
+          Fl_Group hydro_preview {
+            label Preview open
+            xywh {19 125 400 400} box ENGRAVED_FRAME color 0 labelcolor 8
+          } {}
+          Fl_Group hydro_mask_preview {
+            label {Watershed Preview} open
+            xywh {450 125 400 400} box ENGRAVED_FRAME color 0 labelcolor 8
+          } {}
+        }
+        Fl_Group weather_pane {
+          label Weather
+          xywh {0 60 870 520} hide
+        } {
+          Fl_Group {} {open
+            xywh {0 60 870 520} box BORDER_BOX
+          } {
+            Fl_Group weather_preview {
+              label {Grid Preview} open
+              xywh {28 99 445 445} box BORDER_FRAME color 37 labelcolor 8
+            } {}
+            Fl_Group {} {open
+              xywh {500 60 370 520} box FLAT_BOX align 192
+            } {
+              Fl_Input weather_seed_input {
+                label {Seed:}
+                xywh {605 61 165 24}
+              }
+              Fl_Button weather_noise_random_seed {
+                label Random
+                xywh {775 60 64 25} box GTK_UP_BOX down_box GTK_DOWN_BOX
+              }
+              Fl_Group {} {open
+                xywh {570 100 265 105} box BORDER_FRAME color 37
+              } {
+                Fl_Choice weather_noise_choice {
+                  label {Noise type:} open
+                  xywh {694 125 95 25} down_box BORDER_BOX
+                } {}
+                Fl_Input weather_noise_octaves_input {
+                  label {Octaves:}
+                  xywh {695 160 95 25}
+                }
+              }
+              Fl_Box {} {
+                label {Noise settings}
+                xywh {571 90 110 25} box FLAT_BOX
+              }
+              Fl_Group {} {open
+                xywh {570 233 265 264} box BORDER_FRAME color 37
+              } {
+                Fl_Choice weather_type {
+                  label {Köppen type:} open
+                  xywh {694 258 95 25} down_box BORDER_BOX
+                } {}
+                Fl_Choice up_type {
+                  label {Up:} open
+                  xywh {694 365 95 25} down_box BORDER_BOX
+                } {
+                  MenuItem {} {
+                    label Mountains
+                    xywh {20 20 30 20}
+                  }
+                  MenuItem {} {
+                    label Water
+                    xywh {20 20 30 20}
+                  }
+                  MenuItem {} {
+                    label Plains
+                    xywh {20 20 30 20}
+                  }
+                }
+                Fl_Choice down_type {
+                  label {Down:} open
+                  xywh {694 401 95 25} down_box BORDER_BOX
+                } {
+                  MenuItem {} {
+                    label Mountains
+                    xywh {20 20 30 20}
+                  }
+                  MenuItem {} {
+                    label Water
+                    xywh {20 20 30 20}
+                  }
+                  MenuItem {} {
+                    label Plains
+                    xywh {20 20 30 20}
+                  }
+                }
+                Fl_Choice left_type {
+                  label {Left:} open
+                  xywh {694 436 95 25} down_box BORDER_BOX
+                } {
+                  MenuItem {} {
+                    label Mountains
+                    xywh {20 20 30 20}
+                  }
+                  MenuItem {} {
+                    label Water
+                    xywh {20 20 30 20}
+                  }
+                  MenuItem {} {
+                    label Plains
+                    xywh {20 20 30 20}
+                  }
+                }
+                Fl_Choice right_type {
+                  label {Right:} open
+                  xywh {694 471 95 25} down_box BORDER_BOX
+                } {
+                  MenuItem {} {
+                    label Mountains
+                    xywh {20 20 30 20}
+                  }
+                  MenuItem {} {
+                    label Water
+                    xywh {20 20 30 20}
+                  }
+                  MenuItem {} {
+                    label Plains
+                    xywh {20 20 30 20}
+                  }
+                }
+                Fl_Input latitude_input {
+                  label {Latitude:}
+                  xywh {695 293 95 25}
+                }
+                Fl_Input grid_size_input {
+                  label {Grid size:}
+                  xywh {695 329 95 24}
+                }
+              }
+              Fl_Box {} {
+                label {Climate settings}
+                xywh {571 223 110 25} box FLAT_BOX
+              }
+              Fl_Button generate_weather_button {
+                label {Generate weather grid}
+                xywh {570 519 265 25} box THIN_UP_BOX down_box THIN_DOWN_BOX color 247 selection_color 247
+              }
+            }
+            Fl_Box weather_viewer_toolbox {
+              xywh {498 99 45 445} box BORDER_FRAME color 38
+            }
+          }
+        }
+        Fl_Group misc_pane {
+          label Misc open
+          xywh {0 60 870 520} hide
+        } {}
+      }
+    }
+    comment {En el preview pane un panel de zoom, otro abajo con x e y y cosas como value} {in_source in_header
+    }
+  }
+}
