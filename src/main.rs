@@ -89,7 +89,7 @@ fn main() {
 
     ui.seed_input.set_callback(move |x| {
         if x.changed() {
-            topo_settings.seed = Some(x.clone().value().parse::<u32>().unwrap());
+            topo_settings.seed = Some(x.clone().value().parse().unwrap());
 
             match topo_settings.noise_type.clone() {
                 Some(NoiseTypesUi::Simplex) => {
@@ -118,7 +118,7 @@ fn main() {
     ui.seed_random_button.set_callback(move |x1| {
         let seed: u32 = rng.gen_range(std::u32::MIN..std::u32::MAX);
         ui.seed_input.set_value(&*format!("{}", seed));
-        topo_settings.seed = Some(ui.seed_input.value().parse().unwrap());
+        topo_settings.seed = Some(seed);
 
         match topo_settings.noise_type.clone() {
             Some(NoiseTypesUi::Simplex) => {
@@ -146,7 +146,34 @@ fn main() {
     ui.noise_choice.add_choice("Perlin");
     ui.noise_choice.add_choice("Billowed Perlin");
     ui.noise_choice.add_choice("Simplex");
-    ui.noise_choice.set_value(0);
+
+
+  ui.noise_choice.set_callback(move |b| {
+      match b.value() {
+          0 => {
+              topo_settings.noise_type = Some(NoiseTypesUi::Perlin);
+              update_perlin_noise(&topo_settings);
+              unsafe {
+                  NOISE_CHANGED = true;
+              }
+          }
+          1 => {
+              topo_settings.noise_type = Some(NoiseTypesUi::BillowPerlin);
+              update_billow_noise(&topo_settings);
+              unsafe {
+                  NOISE_CHANGED = true;
+              }
+          }
+          2 => {
+              topo_settings.noise_type = Some(NoiseTypesUi::Simplex);
+              update_simplex_noise(&topo_settings);
+              unsafe {
+                  NOISE_CHANGED = true;
+              }
+          }
+          _ => {}
+      }
+  });;
 
     topo_settings.noise_type = match ui.noise_choice.value() {
         0 => Some(NoiseTypesUi::Perlin),
