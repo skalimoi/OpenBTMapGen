@@ -71,7 +71,7 @@ fn main() {
     let mut rng = rand::thread_rng();
 
     let mut topo_settings = TopoSettings {
-        seed: Some(10000000000000000000),
+        seed: Some(4294967295),
         noise_type: Some(NoiseTypesUi::Simplex),
         noise_octaves: Some(8),
         noise_frequency: Some(0.13),
@@ -89,7 +89,7 @@ fn main() {
 
     ui.seed_input.set_callback(move |x| {
         if x.changed() {
-            topo_settings.seed = Some(x.clone().value().parse::<u64>().unwrap());
+            topo_settings.seed = Some(x.clone().value().parse::<u32>().unwrap());
 
             match topo_settings.noise_type.clone() {
                 Some(NoiseTypesUi::Simplex) => {
@@ -116,7 +116,7 @@ fn main() {
     });
 
     ui.seed_random_button.set_callback(move |x1| {
-        let seed: u64 = rng.gen_range(10000000000000000000..18446744073709551615);
+        let seed: u32 = rng.gen_range(std::u32::MIN..std::u32::MAX);
         ui.seed_input.set_value(&*format!("{}", seed));
         topo_settings.seed = Some(ui.seed_input.value().parse().unwrap());
 
