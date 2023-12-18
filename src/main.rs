@@ -25,14 +25,13 @@ fn update_perlin_noise(settings: &TopoSettings) {
         settings.noise_lacunarity.unwrap() as f64,
         1.0,
     );
-    let vis: Visualizer<2> = Visualizer::<2>::new([240, 240], &perlin);
 
     if Path::new("cache.png").exists() {
         fs::remove_file("cache.png").unwrap();
     }
 
-    vis.write_to_file("cache.png")
-        .expect("Error writing cache noise file.");
+    Visualizer::<2>::new([1000, 1000], &perlin).write_to_file("cache.png")
+    .expect("Error writing cache noise file.");
 }
 
 fn update_simplex_noise(settings: &TopoSettings) {
@@ -43,32 +42,32 @@ fn update_simplex_noise(settings: &TopoSettings) {
         settings.noise_lacunarity.unwrap() as f64,
         1.0,
     );
-    let vis: Visualizer<2> = Visualizer::<2>::new([240, 240], &simplex);
-
+  
     if Path::new("cache.png").exists() {
         fs::remove_file("cache.png").unwrap();
     }
 
-    vis.write_to_file("cache.png")
-        .expect("Error writing cache noise file.");
+  Visualizer::<2>::new([1000, 1000], &simplex).write_to_file("cache.png")
+  .expect("Error writing cache noise file.");
+
+    
 }
 
 fn update_billow_noise(settings: &TopoSettings) {
-    let mut perlin = Source::perlin(settings.seed.unwrap());
+    let perlin = Source::perlin(settings.seed.unwrap());
     perlin.clone().billow(
         settings.noise_octaves.unwrap() as u32,
         settings.noise_frequency.unwrap() as f64,
         settings.noise_lacunarity.unwrap() as f64,
         1.0,
     );
-    let vis: Visualizer<2> = Visualizer::<2>::new([240, 240], &perlin);
-
+    
     if Path::new("cache.png").exists() {
         fs::remove_file("cache.png").unwrap();
     }
 
-    vis.write_to_file("cache.png")
-        .expect("Error writing cache noise file.");
+  Visualizer::<2>::new([1000, 1000], &perlin).write_to_file("cache.png")
+  .expect("Error writing cache noise file.");
 }
 
 fn main() {
@@ -265,7 +264,7 @@ fn main() {
         unsafe {
             if NOISE_CHANGED == true {
                 let img = SharedImage::load("cache.png").expect("Error loading file.");
-                ui.preview_box_topo.set_image(Some(img));
+                ui.preview_box_topo.set_image_scaled(Some(img));
                 NOISE_CHANGED = false;
             }
         }
