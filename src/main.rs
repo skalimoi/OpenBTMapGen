@@ -1,65 +1,77 @@
 use std::fs;
 
-use std::path::Path;
-use libnoise::prelude::*;
-use std::path::Path;
-use fltk::{prelude::*, *};
+use crate::topo_settings::TopoSettings;
 use fltk::app::modal;
 use fltk::group::Group;
 use fltk::image::{Image, PngImage, SharedImage};
+use fltk::{prelude::*, *};
+use libnoise::prelude::*;
 use rand::Rng;
-use crate::topo_settings::TopoSettings;
+use std::path::Path;
 use topo_settings::NoiseTypesUi;
 
-mod ui;
 mod menu_bar;
-mod topography_pane;
 mod topo_settings;
+mod topography_pane;
+mod ui;
 
-fn update_perlin_noise(settings: &TopoSettings, ui: &mut ui::UserInterface) {
-  let mut perlin = Source::perlin(settings.seed.unwrap());
-  perlin.fbm(settings.noise_octaves.unwrap() as u32, settings.noise_frequency.unwrap() as f64, settings.noise_lacunarity.unwrap() as f64, 1.0);
-  let vis: Visualizer<2> = Visualizer::<2>::new([240, 240], &perlin);
+static mut NOISE_CHANGED: bool = false;
 
-  if Path::new("cache.png").exists() {
-    fs::remove_file("cache.png").unwrap();
-  }
-  
-  vis.write_to_file("cache.png").expect("Error writing cache noise file.");
-  let img = SharedImage::load("cache.png").expect("Error loading file.");
-  ui.preview_box_topo.set_image(Some(img));
+fn update_perlin_noise(settings: &TopoSettings) {
+    let mut perlin = Source::perlin(settings.seed.unwrap());
+    perlin.clone().fbm(
+        settings.noise_octaves.unwrap() as u32,
+        settings.noise_frequency.unwrap() as f64,
+        settings.noise_lacunarity.unwrap() as f64,
+        1.0,
+    );
+    let vis: Visualizer<2> = Visualizer::<2>::new([240, 240], &perlin);
+
+    if Path::new("cache.png").exists() {
+        fs::remove_file("cache.png").unwrap();
+    }
+
+    vis.write_to_file("cache.png")
+        .expect("Error writing cache noise file.");
 }
 
-fn update_simplex_noise(settings: &TopoSettings, ui: &mut ui::UserInterface) {
-  let mut simplex = Source::simplex(settings.seed.unwrap());
-  simplex.fbm(settings.noise_octaves.unwrap() as u32, settings.noise_frequency.unwrap() as f64, settings.noise_lacunarity.unwrap() as f64, 1.0);
-  let vis: Visualizer<2> = Visualizer::<2>::new([240, 240], &simplex);
+fn update_simplex_noise(settings: &TopoSettings) {
+    let mut simplex = Source::simplex(settings.seed.unwrap());
+    simplex.clone().fbm(
+        settings.noise_octaves.unwrap() as u32,
+        settings.noise_frequency.unwrap() as f64,
+        settings.noise_lacunarity.unwrap() as f64,
+        1.0,
+    );
+    let vis: Visualizer<2> = Visualizer::<2>::new([240, 240], &simplex);
 
-  if Path::new("cache.png").exists() {
-    fs::remove_file("cache.png").unwrap();
-  }
+    if Path::new("cache.png").exists() {
+        fs::remove_file("cache.png").unwrap();
+    }
 
-  vis.write_to_file("cache.png").expect("Error writing cache noise file.");
-  let img = SharedImage::load("cache.png").expect("Error loading file.");
-  ui.preview_box_topo.set_image(Some(img));
+    vis.write_to_file("cache.png")
+        .expect("Error writing cache noise file.");
 }
 
-fn update_billow_noise(settings: &TopoSettings, ui: &mut ui::UserInterface) {
-  let mut perlin = Source::perlin(settings.seed.unwrap());
-  perlin.billow(settings.noise_octaves.unwrap() as u32, settings.noise_frequency.unwrap() as f64, settings.noise_lacunarity.unwrap() as f64, 1.0);
-  let vis: Visualizer<2> = Visualizer::<2>::new([240, 240], &perlin);
+fn update_billow_noise(settings: &TopoSettings) {
+    let mut perlin = Source::perlin(settings.seed.unwrap());
+    perlin.clone().billow(
+        settings.noise_octaves.unwrap() as u32,
+        settings.noise_frequency.unwrap() as f64,
+        settings.noise_lacunarity.unwrap() as f64,
+        1.0,
+    );
+    let vis: Visualizer<2> = Visualizer::<2>::new([240, 240], &perlin);
 
-  if Path::new("cache.png").exists() {
-    fs::remove_file("cache.png").unwrap();
-  }
+    if Path::new("cache.png").exists() {
+        fs::remove_file("cache.png").unwrap();
+    }
 
-  vis.write_to_file("cache.png").expect("Error writing cache noise file.");
-  let img = SharedImage::load("cache.png").expect("Error loading file.");
-  ui.preview_box_topo.set_image(Some(img));
+    vis.write_to_file("cache.png")
+        .expect("Error writing cache noise file.");
 }
 
 fn main() {
-
     let mut rng = rand::thread_rng();
 
     let mut topo_settings = TopoSettings {
@@ -81,21 +93,29 @@ fn main() {
 
     ui.seed_input.set_callback(move |x| {
         if x.changed() {
-            topo_settings.seed = Some(x.value().parse::<u64>().unwrap());
+            topo_settings.seed = Some(x.clone().value().parse::<u64>().unwrap());
 
             match topo_settings.noise_type.clone() {
-                Some(NoiseTypesUi::Simplex) =>
-                    {
-                        update_simplex_noise(&topo_settings, &mut ui);
-                    },
+                Some(NoiseTypesUi::Simplex) => {
+                    update_simplex_noise(&topo_settings);
+                    unsafe {
+                        NOISE_CHANGED = true;
+                    }
+                }
                 Some(NoiseTypesUi::Perlin) => {
-                    update_perlin_noise(&topo_settings, &mut ui);
-                },
-                Some(NoiseTypesUi::BillowPerlin) => { update_billow_noise(&topo_settings, &mut ui); },
+                    update_perlin_noise(&topo_settings);
+                    unsafe {
+                        NOISE_CHANGED = true;
+                    }
+                }
+                Some(NoiseTypesUi::BillowPerlin) => {
+                    update_billow_noise(&topo_settings);
+                    unsafe {
+                        NOISE_CHANGED = true;
+                    }
+                }
                 _ => {}
             };
-
-
         }
     });
 
@@ -105,14 +125,24 @@ fn main() {
         topo_settings.seed = Some(ui.seed_input.value().parse().unwrap());
 
         match topo_settings.noise_type.clone() {
-            Some(NoiseTypesUi::Simplex) =>
-                {
-                  update_simplex_noise(&topo_settings, &mut ui);
-                },
+            Some(NoiseTypesUi::Simplex) => {
+                update_simplex_noise(&topo_settings);
+                unsafe {
+                    NOISE_CHANGED = true;
+                }
+            }
             Some(NoiseTypesUi::Perlin) => {
-              update_perlin_noise(&topo_settings, &mut ui);
-            },
-            Some(NoiseTypesUi::BillowPerlin) => { update_billow_noise(&topo_settings, &mut ui); },
+                update_perlin_noise(&topo_settings);
+                unsafe {
+                    NOISE_CHANGED = true;
+                }
+            }
+            Some(NoiseTypesUi::BillowPerlin) => {
+                update_billow_noise(&topo_settings);
+                unsafe {
+                    NOISE_CHANGED = true;
+                }
+            }
             _ => {}
         };
     });
@@ -129,46 +159,59 @@ fn main() {
         _ => None,
     };
 
-
     ui.noise_octaves_input.set_callback(move |x2| {
-       if x2.changed() {
+        if x2.changed() {
+            topo_settings.noise_octaves = Some(x2.value().parse().unwrap());
 
-           topo_settings.noise_octaves = Some(x2.value().parse().unwrap());
-
-           match topo_settings.noise_type {
-               Some(NoiseTypesUi::Simplex) => {
-                 update_simplex_noise(&topo_settings, &mut ui);
-               },
-               Some(NoiseTypesUi::Perlin) => {
-                 update_perlin_noise(&topo_settings, &mut ui);
-               },
-               Some(NoiseTypesUi::BillowPerlin) => {
-                 update_billow_noise(&topo_settings, &mut ui);
-               },
-               _ => {}
-
-           };
-
-       }
+            match topo_settings.noise_type {
+                Some(NoiseTypesUi::Simplex) => {
+                    update_simplex_noise(&topo_settings);
+                    unsafe {
+                        NOISE_CHANGED = true;
+                    }
+                }
+                Some(NoiseTypesUi::Perlin) => {
+                    update_perlin_noise(&topo_settings);
+                    unsafe {
+                        NOISE_CHANGED = true;
+                    }
+                }
+                Some(NoiseTypesUi::BillowPerlin) => {
+                    update_billow_noise(&topo_settings);
+                    unsafe {
+                        NOISE_CHANGED = true;
+                    }
+                }
+                _ => {}
+            };
+        }
     });
 
     ui.noise_freq_input.set_callback(move |x3| {
         if x3.changed() {
             topo_settings.noise_frequency = Some(x3.value().parse().unwrap());
 
-          match topo_settings.noise_type {
-               Some(NoiseTypesUi::Simplex) => {
-                 update_simplex_noise(&topo_settings, &mut ui);
-               },
-               Some(NoiseTypesUi::Perlin) => {
-                 update_perlin_noise(&topo_settings, &mut ui);
-               },
-               Some(NoiseTypesUi::BillowPerlin) => {
-                 update_billow_noise(&topo_settings, &mut ui);
-               },
-               _ => {}
-
-           };
+            match topo_settings.noise_type {
+                Some(NoiseTypesUi::Simplex) => {
+                    update_simplex_noise(&topo_settings);
+                    unsafe {
+                        NOISE_CHANGED = true;
+                    }
+                }
+                Some(NoiseTypesUi::Perlin) => {
+                    update_perlin_noise(&topo_settings);
+                    unsafe {
+                        NOISE_CHANGED = true;
+                    }
+                }
+                Some(NoiseTypesUi::BillowPerlin) => {
+                    update_billow_noise(&topo_settings);
+                    unsafe {
+                        NOISE_CHANGED = true;
+                    }
+                }
+                _ => {}
+            };
         }
     });
 
@@ -176,26 +219,34 @@ fn main() {
         if x4.changed() {
             topo_settings.noise_lacunarity = Some(x4.value().parse().unwrap());
 
-          match topo_settings.noise_type {
-               Some(NoiseTypesUi::Simplex) => {
-                 update_simplex_noise(&topo_settings, &mut ui);
-               },
-               Some(NoiseTypesUi::Perlin) => {
-                 update_perlin_noise(&topo_settings, &mut ui);
-               },
-               Some(NoiseTypesUi::BillowPerlin) => {
-                 update_billow_noise(&topo_settings, &mut ui);
-               },
-               _ => {}
-
-           };
+            match topo_settings.noise_type {
+                Some(NoiseTypesUi::Simplex) => {
+                    update_simplex_noise(&topo_settings);
+                    unsafe {
+                        NOISE_CHANGED = true;
+                    }
+                }
+                Some(NoiseTypesUi::Perlin) => {
+                    update_perlin_noise(&topo_settings);
+                    unsafe {
+                        NOISE_CHANGED = true;
+                    }
+                }
+                Some(NoiseTypesUi::BillowPerlin) => {
+                    update_billow_noise(&topo_settings);
+                    unsafe {
+                        NOISE_CHANGED = true;
+                    }
+                }
+                _ => {}
+            };
         }
     });
 
     ui.min_height_input.set_callback(move |x5| {
-       if x5.changed() {
-           topo_settings.min_height = x5.value() as i32;
-       }
+        if x5.changed() {
+            topo_settings.min_height = x5.value() as i32;
+        }
     });
 
     ui.max_height_input.set_callback(move |x6| {
@@ -210,10 +261,13 @@ fn main() {
         }
     });
 
-
     while app.wait() {
-        if ui.topography_pane.active() {
-
+        unsafe {
+            if NOISE_CHANGED == true {
+                let img = SharedImage::load("cache.png").expect("Error loading file.");
+                ui.preview_box_topo.set_image(Some(img));
+                NOISE_CHANGED = false;
+            }
         }
     }
 }
