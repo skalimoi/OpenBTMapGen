@@ -7,7 +7,7 @@ pub enum NoiseTypesUi {
 
 #[derive(Copy, Clone)]
 pub struct TopoSettings {
-    pub seed: Option<u64>,
+    pub seed: Option<u32>,
     pub noise_type: Option<NoiseTypesUi>,
     pub noise_octaves: Option<u32>,
     pub noise_frequency: Option<f64>,
