@@ -1,11 +1,11 @@
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum NoiseTypesUi {
     Simplex,
     Perlin,
     BillowPerlin
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct TopoSettings {
     pub seed: Option<u32>,
     pub noise_type: Option<NoiseTypesUi>,

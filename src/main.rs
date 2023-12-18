@@ -287,6 +287,7 @@ fn main() {
     while app.wait() {
         unsafe {
             if NOISE_CHANGED == true {
+              println!("{:?}", topo_settings);
                 let img = SharedImage::load("example_images/cache.png").expect("Error loading file.");
                 ui.preview_box_topo.set_image_scaled(Some(img));
               ui.preview_box_topo.redraw();
