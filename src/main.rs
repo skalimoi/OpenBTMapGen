@@ -20,9 +20,9 @@ static mut NOISE_CHANGED: bool = false;
 fn update_perlin_noise(settings: &TopoSettings) {
     let mut perlin = Source::perlin(settings.seed.unwrap());
     perlin.clone().fbm(
-        settings.noise_octaves.unwrap() as u32,
-        settings.noise_frequency.unwrap() as f64,
-        settings.noise_lacunarity.unwrap() as f64,
+      settings.noise_octaves.expect("No octaves set"),
+      settings.noise_frequency.expect("No frequency set"),
+      settings.noise_lacunarity.expect("No lacunarity set"),
         1.0,
     );
 
@@ -38,9 +38,9 @@ fn update_simplex_noise(settings: &TopoSettings) {
     let mut simplex = Source::simplex(settings.seed.unwrap());
     println!("{:?}", settings.seed);
     simplex.clone().fbm(
-        settings.noise_octaves.unwrap() as u32,
-        settings.noise_frequency.unwrap() as f64,
-        settings.noise_lacunarity.unwrap() as f64,
+      settings.noise_octaves.expect("No octaves set"),
+      settings.noise_frequency.expect("No frequency set"),
+      settings.noise_lacunarity.expect("No lacunarity set"),
         1.0,
     );
   
@@ -58,9 +58,9 @@ fn update_simplex_noise(settings: &TopoSettings) {
 fn update_billow_noise(settings: &TopoSettings) {
     let perlin = Source::perlin(settings.seed.unwrap());
     perlin.clone().billow(
-        settings.noise_octaves.unwrap() as u32,
-        settings.noise_frequency.unwrap() as f64,
-        settings.noise_lacunarity.unwrap() as f64,
+        settings.noise_octaves.expect("No octaves set"),
+        settings.noise_frequency.expect("No frequency set"),
+        settings.noise_lacunarity.expect("No lacunarity set"),
         1.0,
     );
     
