@@ -1,0 +1,39 @@
+name: Rust
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Build
+      run: cargo build --release
+    - name: Run tests
+      run: cargo test --verbose
+
+    - name: Rust Release
+  # You may pin to the exact commit or the version.
+  # uses: manoadamro/rust-release@028b5d008bac5437257ec3ec905b12aed11e766a
+      uses: manoadamro/rust-release@v1
+      with:
+    # Github Repo Owner
+        owner: skalimoi
+    # Github Repo
+        repo: skalimoi/OpenBTMapGen
+    # Github Token
+        token: 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
+    # Cargo.toml path
+        cargo: Cargo.toml
+    # do not actually create release
+        dry_run: false
+            
