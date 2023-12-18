@@ -22,11 +22,15 @@ jobs:
     - name: Build Debug
       run: cargo build
 
-    - name: Upload a Build Artifact
+    - name: Release package
       uses: actions/upload-artifact@v4.0.0
       with:
         name: Release Binary
         path: target/release/OpenBattlesimGen.exe
+
+    - name: Debug Package
+      uses: actions/upload-artifact@v4.0.0
+      with:
         name: Debug Binary
         path: target/debug/OpenBattlesimGen.exe
             
