@@ -5,7 +5,7 @@ use fltk::app::modal;
 use fltk::group::Group;
 use fltk::image::{Image, PngImage, SharedImage};
 use fltk::{prelude::*, *};
-use libnoise::prelude::*;
+use noise::*;
 use rand::Rng;
 use std::path::Path;
 use topo_settings::NoiseTypesUi;
@@ -18,41 +18,35 @@ mod ui;
 static mut NOISE_CHANGED: bool = false;
 
 fn update_perlin_noise(settings: &TopoSettings) {
-    let mut perlin = Source::perlin(settings.seed.unwrap());
-    perlin.clone().fbm(
-      settings.noise_octaves.expect("No octaves set"),
-      settings.noise_frequency.expect("No frequency set"),
-      settings.noise_lacunarity.expect("No lacunarity set"),
-        1.0,
-    );
+    let mut perlin: Fbm<Perlin> = Default::default();
+      perlin.set_seed(settings.noise_seed).set_octaves(settings.noise_octaves).set_frequency(settings.noise_frequency).set_lacunarity(settings.noise_lacunarity);
 
     if Path::new("cache.png").exists() {
         fs::remove_file("cache.png").unwrap();
     }
 
-    Visualizer::<2>::new([1000, 1000], &perlin).write_to_file("cache.png")
-    .expect("Error writing cache noise file.");
+    Visualizer::<2>::new([1000, 1000], &perlin)
+        .write_to_file("cache.png")
+        .expect("Error writing cache noise file.");
 }
 
 fn update_simplex_noise(settings: &TopoSettings) {
     let mut simplex = Source::simplex(settings.seed.unwrap());
     println!("{:?}", settings.seed);
     simplex.clone().fbm(
-      settings.noise_octaves.expect("No octaves set"),
-      settings.noise_frequency.expect("No frequency set"),
-      settings.noise_lacunarity.expect("No lacunarity set"),
+        settings.noise_octaves.expect("No octaves set"),
+        settings.noise_frequency.expect("No frequency set"),
+        settings.noise_lacunarity.expect("No lacunarity set"),
         1.0,
     );
-  
+
     if Path::new("cache.png").exists() {
         fs::remove_file("cache.png").unwrap();
     }
 
-
-  
-  Visualizer::<2>::new([1000, 1000], &simplex).write_to_file("cache.png").expect("Error writing cache noise file.");
-
-    
+    Visualizer::<2>::new([1000, 1000], &simplex)
+        .write_to_file("cache.png")
+        .expect("Error writing cache noise file.");
 }
 
 fn update_billow_noise(settings: &TopoSettings) {
@@ -63,13 +57,14 @@ fn update_billow_noise(settings: &TopoSettings) {
         settings.noise_lacunarity.expect("No lacunarity set"),
         1.0,
     );
-    
+
     if Path::new("cache.png").exists() {
         fs::remove_file("cache.png").unwrap();
     }
 
-  Visualizer::<2>::new([1000, 1000], &perlin).write_to_file("cache.png")
-  .expect("Error writing cache noise file.");
+    Visualizer::<2>::new([1000, 1000], &perlin)
+        .write_to_file("cache.png")
+        .expect("Error writing cache noise file.");
 }
 
 fn main() {
