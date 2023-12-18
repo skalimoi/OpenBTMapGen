@@ -36,6 +36,7 @@ fn update_perlin_noise(settings: &TopoSettings) {
 
 fn update_simplex_noise(settings: &TopoSettings) {
     let mut simplex = Source::simplex(settings.seed.unwrap());
+    println!("{:?}", settings.seed);
     simplex.clone().fbm(
         settings.noise_octaves.unwrap() as u32,
         settings.noise_frequency.unwrap() as f64,
@@ -47,8 +48,9 @@ fn update_simplex_noise(settings: &TopoSettings) {
         fs::remove_file("cache.png").unwrap();
     }
 
-  Visualizer::<2>::new([1000, 1000], &simplex).write_to_file("cache.png")
-  .expect("Error writing cache noise file.");
+
+  
+  Visualizer::<2>::new([1000, 1000], &simplex).write_to_file("cache.png").expect("Error writing cache noise file.");
 
     
 }
