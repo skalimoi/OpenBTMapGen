@@ -1,0 +1,20 @@
+# data file for the Fltk User Interface Designer (fluid)
+version 1.0400
+header_name {.h}
+code_name {.cxx}
+widget_class UserInterface {open
+  xywh {34 57 120 100} visible
+} {
+  Fl_Group {} {open selected
+    xywh {25 25 95 75}
+  } {
+    Fl_Button {} {
+      label button
+      xywh {50 50 25 25}
+    }
+  }
+  Fl_Button2 {} {
+    label button
+    xywh {25 25 25 25}
+  }
+}

@@ -1,0 +1,13 @@
+[package]
+name = "fluid-parser"
+version = "0.1.14"
+edition = "2018"
+authors = ["Mohammed Alyousef <mohammed.alyousef@neurosrg.com>"]
+description = "A fluid (fltk ui designer) file parser"
+repository = "https://github.com/MoAlyousef/fluid-parser"
+documentation = "https://docs.rs/fluid-parser"
+keywords = ["gui", "ui", "widgets", "bindings", "graphics"]
+categories = ["gui"]
+readme = "README.md"
+license = "MIT"
+

@@ -1,0 +1,26 @@
+[package]
+name = "jpeg-decoder"
+version = "0.1.22"
+authors = ["Ulf Nilsson <kaksmet@gmail.com>"]
+description = "JPEG decoder"
+documentation = "https://docs.rs/jpeg-decoder"
+repository = "https://github.com/image-rs/jpeg-decoder"
+readme = "README.md"
+keywords = ["jpeg", "jpg", "decoder", "image"]
+license = "MIT / Apache-2.0"
+exclude = ["tests/*"]
+
+[dependencies]
+rayon = { version = "1.0", optional = true }
+
+[dev-dependencies]
+png = "0.16"
+walkdir = "2.0"
+criterion = "0.3"
+
+[[bench]]
+name = "decoding_benchmark"
+harness = false
+
+[features]
+default = ["rayon"]
