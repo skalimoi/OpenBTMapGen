@@ -21,10 +21,10 @@ static mut NOISE_CHANGED: bool = false;
 fn update_perlin_noise(settings: &TopoSettings) {
     let mut perlin: Fbm<Perlin> = Default::default();
     perlin = perlin
-        .set_seed(settings.noise_seed)
-        .set_octaves(settings.noise_octaves)
-        .set_frequency(settings.noise_frequency)
-        .set_lacunarity(settings.noise_lacunarity);
+        .set_seed(settings.seed.unwrap() as u32)
+        .set_octaves(settings.noise_octaves.unwrap() as usize)
+        .set_frequency(settings.noise_frequency.unwrap())
+        .set_lacunarity(settings.noise_lacunarity.unwrap());
 
     if Path::new("example_images/cache.png").exists() {
         fs::remove_file("example_images/cache.png").unwrap();
@@ -38,26 +38,26 @@ fn update_perlin_noise(settings: &TopoSettings) {
 fn update_simplex_noise(settings: &TopoSettings) {
     let mut simplex: Fbm<Simplex> = Default::default();
     simplex = simplex
-  .set_seed(settings.noise_seed)
-  .set_octaves(settings.noise_octaves)
-  .set_frequency(settings.noise_frequency)
-  .set_lacunarity(settings.noise_lacunarity);
+  .set_seed(settings.seed.unwrap() as u32)
+  .set_octaves(settings.noise_octaves.unwrap() as usize)
+  .set_frequency(settings.noise_frequency.unwrap())
+  .set_lacunarity(settings.noise_lacunarity.unwrap());
 
   if Path::new("example_images/cache.png").exists() {
       fs::remove_file("example_images/cache.png").unwrap();
   }
-  let map = PlaneMapBuilder::<Fbm<Simplex>, 2>::new(perlin.clone()).set_size(230, 230).set_is_seamless(false).set_x_bounds(-1.0, 1.0).set_y_bounds(-1.0, 1.0).build();
+  let map = PlaneMapBuilder::<Fbm<Simplex>, 2>::new(simplex.clone()).set_size(230, 230).set_is_seamless(false).set_x_bounds(-1.0, 1.0).set_y_bounds(-1.0, 1.0).build();
 
   map.write_to_file("cache.png");
 }
 
 fn update_billow_noise(settings: &TopoSettings) {
-    let perlin: Billow<Perlin> = Default::default();
+    let mut perlin: Billow<Perlin> = Default::default();
     perlin = perlin
-  .set_seed(settings.noise_seed)
-  .set_octaves(settings.noise_octaves)
-  .set_frequency(settings.noise_frequency)
-  .set_lacunarity(settings.noise_lacunarity);
+  .set_seed(settings.seed.unwrap() as u32)
+  .set_octaves(settings.noise_octaves.unwrap() as usize)
+  .set_frequency(settings.noise_frequency.unwrap())
+  .set_lacunarity(settings.noise_lacunarity.unwrap());
 
   if Path::new("example_images/cache.png").exists() {
       fs::remove_file("example_images/cache.png").unwrap();
@@ -262,6 +262,7 @@ fn main() {
             if NOISE_CHANGED == true {
                 let img = SharedImage::load("example_images/cache.png").expect("Error loading file.");
                 ui.preview_box_topo.set_image_scaled(Some(img));
+              ui.preview_box_topo.redraw();
                 NOISE_CHANGED = false;
             }
         }
