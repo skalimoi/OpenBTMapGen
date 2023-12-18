@@ -5,7 +5,8 @@ use fltk::app::modal;
 use fltk::group::Group;
 use fltk::image::{Image, PngImage, SharedImage};
 use fltk::{prelude::*, *};
-use noise::*;
+use noise::{Billow, Cache, Fbm, MultiFractal, Perlin, Seedable, Simplex};
+use noise::utils::{NoiseImage, NoiseMap, NoiseMapBuilder, PlaneMapBuilder};
 use rand::Rng;
 use std::path::Path;
 use topo_settings::NoiseTypesUi;
@@ -19,52 +20,51 @@ static mut NOISE_CHANGED: bool = false;
 
 fn update_perlin_noise(settings: &TopoSettings) {
     let mut perlin: Fbm<Perlin> = Default::default();
-      perlin.set_seed(settings.noise_seed).set_octaves(settings.noise_octaves).set_frequency(settings.noise_frequency).set_lacunarity(settings.noise_lacunarity);
+    perlin = perlin
+        .set_seed(settings.noise_seed)
+        .set_octaves(settings.noise_octaves)
+        .set_frequency(settings.noise_frequency)
+        .set_lacunarity(settings.noise_lacunarity);
 
-    if Path::new("cache.png").exists() {
-        fs::remove_file("cache.png").unwrap();
+    if Path::new("example_images/cache.png").exists() {
+        fs::remove_file("example_images/cache.png").unwrap();
     }
 
-    Visualizer::<2>::new([1000, 1000], &perlin)
-        .write_to_file("cache.png")
-        .expect("Error writing cache noise file.");
+  let map = PlaneMapBuilder::<Fbm<Perlin>, 2>::new(perlin.clone()).set_size(230, 230).set_is_seamless(false).set_x_bounds(-1.0, 1.0).set_y_bounds(-1.0, 1.0).build();
+
+  map.write_to_file("cache.png");
 }
 
 fn update_simplex_noise(settings: &TopoSettings) {
-    let mut simplex = Source::simplex(settings.seed.unwrap());
-    println!("{:?}", settings.seed);
-    simplex.clone().fbm(
-        settings.noise_octaves.expect("No octaves set"),
-        settings.noise_frequency.expect("No frequency set"),
-        settings.noise_lacunarity.expect("No lacunarity set"),
-        1.0,
-    );
+    let mut simplex: Fbm<Simplex> = Default::default();
+    simplex = simplex
+  .set_seed(settings.noise_seed)
+  .set_octaves(settings.noise_octaves)
+  .set_frequency(settings.noise_frequency)
+  .set_lacunarity(settings.noise_lacunarity);
 
-    if Path::new("cache.png").exists() {
-        fs::remove_file("cache.png").unwrap();
-    }
+  if Path::new("example_images/cache.png").exists() {
+      fs::remove_file("example_images/cache.png").unwrap();
+  }
+  let map = PlaneMapBuilder::<Fbm<Simplex>, 2>::new(perlin.clone()).set_size(230, 230).set_is_seamless(false).set_x_bounds(-1.0, 1.0).set_y_bounds(-1.0, 1.0).build();
 
-    Visualizer::<2>::new([1000, 1000], &simplex)
-        .write_to_file("cache.png")
-        .expect("Error writing cache noise file.");
+  map.write_to_file("cache.png");
 }
 
 fn update_billow_noise(settings: &TopoSettings) {
-    let perlin = Source::perlin(settings.seed.unwrap());
-    perlin.clone().billow(
-        settings.noise_octaves.expect("No octaves set"),
-        settings.noise_frequency.expect("No frequency set"),
-        settings.noise_lacunarity.expect("No lacunarity set"),
-        1.0,
-    );
+    let perlin: Billow<Perlin> = Default::default();
+    perlin = perlin
+  .set_seed(settings.noise_seed)
+  .set_octaves(settings.noise_octaves)
+  .set_frequency(settings.noise_frequency)
+  .set_lacunarity(settings.noise_lacunarity);
 
-    if Path::new("cache.png").exists() {
-        fs::remove_file("cache.png").unwrap();
-    }
+  if Path::new("example_images/cache.png").exists() {
+      fs::remove_file("example_images/cache.png").unwrap();
+  }
+  let map = PlaneMapBuilder::<Billow<Perlin>, 2>::new(perlin.clone()).set_size(230, 230).set_is_seamless(false).set_x_bounds(-1.0, 1.0).set_y_bounds(-1.0, 1.0).build();
 
-    Visualizer::<2>::new([1000, 1000], &perlin)
-        .write_to_file("cache.png")
-        .expect("Error writing cache noise file.");
+  map.write_to_file("cache.png");
 }
 
 fn main() {
@@ -260,7 +260,7 @@ fn main() {
     while app.wait() {
         unsafe {
             if NOISE_CHANGED == true {
-                let img = SharedImage::load("cache.png").expect("Error loading file.");
+                let img = SharedImage::load("example_images/cache.png").expect("Error loading file.");
                 ui.preview_box_topo.set_image_scaled(Some(img));
                 NOISE_CHANGED = false;
             }
