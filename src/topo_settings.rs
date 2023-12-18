@@ -9,9 +9,9 @@ pub enum NoiseTypesUi {
 pub struct TopoSettings {
     pub seed: Option<u64>,
     pub noise_type: Option<NoiseTypesUi>,
-    pub noise_octaves: Option<u64>,
-    pub noise_frequency: Option<u64>,
-    pub noise_lacunarity: Option<u64>,
+    pub noise_octaves: Option<u32>,
+    pub noise_frequency: Option<f64>,
+    pub noise_lacunarity: Option<f64>,
     pub mountain_pct: u8,
     pub sea_pct: u8,
     pub min_height: i32,
