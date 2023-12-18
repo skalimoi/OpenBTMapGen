@@ -29,7 +29,7 @@ jobs:
     # Github Repo Owner
         owner: skalimoi
     # Github Repo
-        repo: skalimoi/OpenBTMapGen
+        repo: OpenBTMapGen
     # Github Token
         token: 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
     # Cargo.toml path
