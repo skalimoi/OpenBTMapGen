@@ -16,7 +16,7 @@ mod topo_settings;
 mod topography_pane;
 mod ui;
 
-static mut NOISE_CHANGED: bool = false;
+static TOPO_SETTINGS: TopoSettings =
 
 fn update_perlin_noise(settings: &TopoSettings) {
     let mut perlin: Fbm<Perlin> = Default::default();
@@ -68,6 +68,11 @@ fn update_billow_noise(settings: &TopoSettings) {
 }
 
 fn main() {
+
+    let app = app::App::default();
+    let mut ui = ui::UserInterface::make_window();
+    let mut win = ui.main_window.clone();
+
     let mut rng = rand::thread_rng();
 
     let mut topo_settings = TopoSettings {
@@ -75,40 +80,31 @@ fn main() {
         noise_type: Some(NoiseTypesUi::Simplex),
         noise_octaves: Some(8),
         noise_frequency: Some(0.13),
-        noise_lacunarity: Some(2.0),
+        noise_lacunarity: Some(1.0),
         mountain_pct: 25,
         sea_pct: 5,
         min_height: -50,
         max_height: 1000,
         erosion_cycles: 0,
+        noise_changed: false
     };
-
-    let app = app::App::default();
-    let mut ui = ui::UserInterface::make_window();
-    let mut win = ui.main_window.clone();
 
     ui.seed_input.set_callback(move |x| {
         if x.changed() {
-            topo_settings.seed = Some(x.clone().value().parse().unwrap());
+            topo_settings.set_seed(Some(x.clone().value().parse().unwrap()));
 
-            match topo_settings.noise_type.clone() {
+            match topo_settings.noise_type {
                 Some(NoiseTypesUi::Simplex) => {
                     update_simplex_noise(&topo_settings);
-                    unsafe {
-                        NOISE_CHANGED = true;
-                    }
+                    topo_settings.set_signal(true);
                 }
                 Some(NoiseTypesUi::Perlin) => {
                     update_perlin_noise(&topo_settings);
-                    unsafe {
-                        NOISE_CHANGED = true;
-                    }
+                    topo_settings.set_signal(true);
                 }
                 Some(NoiseTypesUi::BillowPerlin) => {
                     update_billow_noise(&topo_settings);
-                    unsafe {
-                        NOISE_CHANGED = true;
-                    }
+                    topo_settings.set_signal(true);
                 }
                 _ => {}
             };
@@ -116,28 +112,25 @@ fn main() {
     });
 
     ui.seed_random_button.set_callback(move |x1| {
-        let seed: u32 = rng.gen_range(std::u32::MIN..std::u32::MAX);
-        ui.seed_input.set_value(&*format!("{}", seed));
-        topo_settings.seed = Some(seed);
+        let seed: u32 = rng.gen_range(u32::MIN..u32::MAX);
+        ui.seed_input.set_value(&format!("{}", seed));
+        topo_settings.set_seed(Some(seed));
 
-        match topo_settings.noise_type.clone() {
+        match topo_settings.noise_type {
             Some(NoiseTypesUi::Simplex) => {
                 update_simplex_noise(&topo_settings);
-                unsafe {
-                    NOISE_CHANGED = true;
-                }
+                topo_settings.set_signal(true);
+                println!("{:?}", topo_settings.noise_changed.clone());
             }
             Some(NoiseTypesUi::Perlin) => {
                 update_perlin_noise(&topo_settings);
-                unsafe {
-                    NOISE_CHANGED = true;
-                }
+                topo_settings.set_signal(true);
+                println!("{:?}", topo_settings.noise_changed.clone());
             }
             Some(NoiseTypesUi::BillowPerlin) => {
                 update_billow_noise(&topo_settings);
-                unsafe {
-                    NOISE_CHANGED = true;
-                }
+                topo_settings.set_signal(true);
+                println!("{:?}", topo_settings.noise_changed.clone());
             }
             _ => {}
         };
@@ -151,59 +144,48 @@ fn main() {
   ui.noise_choice.set_callback(move |b| {
       match b.value() {
           0 => {
-              topo_settings.noise_type = Some(NoiseTypesUi::Perlin);
+              topo_settings.set_type(Some(NoiseTypesUi::Perlin));
               update_perlin_noise(&topo_settings);
-              unsafe {
-                  NOISE_CHANGED = true;
-              }
+              topo_settings.set_signal(true);
           }
           1 => {
-              topo_settings.noise_type = Some(NoiseTypesUi::BillowPerlin);
+              topo_settings.set_type(Some(NoiseTypesUi::BillowPerlin));
               update_billow_noise(&topo_settings);
-              unsafe {
-                  NOISE_CHANGED = true;
-              }
+              topo_settings.set_signal(true);
           }
           2 => {
-              topo_settings.noise_type = Some(NoiseTypesUi::Simplex);
+              topo_settings.set_type(Some(NoiseTypesUi::Simplex));
               update_simplex_noise(&topo_settings);
-              unsafe {
-                  NOISE_CHANGED = true;
-              }
+              topo_settings.set_signal(true);
           }
           _ => {}
       }
   });;
 
-    topo_settings.noise_type = match ui.noise_choice.value() {
-        0 => Some(NoiseTypesUi::Perlin),
-        1 => Some(NoiseTypesUi::BillowPerlin),
-        2 => Some(NoiseTypesUi::Simplex),
-        _ => None,
-    };
+    // topo_settings.noise_type = match ui.noise_choice.value() {
+    //     0 => Some(NoiseTypesUi::Perlin),
+    //     1 => Some(NoiseTypesUi::BillowPerlin),
+    //     2 => Some(NoiseTypesUi::Simplex),
+    //     _ => None,
+    // };
 
     ui.noise_octaves_input.set_callback(move |x2| {
         if x2.changed() {
-            topo_settings.noise_octaves = Some(x2.value().parse().unwrap());
+            topo_settings.set_octaves(Some(x2.value().parse().unwrap()));
 
             match topo_settings.noise_type {
                 Some(NoiseTypesUi::Simplex) => {
                     update_simplex_noise(&topo_settings);
-                    unsafe {
-                        NOISE_CHANGED = true;
-                    }
+                    topo_settings.set_signal(true);
                 }
                 Some(NoiseTypesUi::Perlin) => {
                     update_perlin_noise(&topo_settings);
-                    unsafe {
-                        NOISE_CHANGED = true;
-                    }
+                    topo_settings.set_signal(true);
+
                 }
                 Some(NoiseTypesUi::BillowPerlin) => {
                     update_billow_noise(&topo_settings);
-                    unsafe {
-                        NOISE_CHANGED = true;
-                    }
+                    topo_settings.set_signal(true);
                 }
                 _ => {}
             };
@@ -212,26 +194,20 @@ fn main() {
 
     ui.noise_freq_input.set_callback(move |x3| {
         if x3.changed() {
-            topo_settings.noise_frequency = Some(x3.value().parse().unwrap());
+            topo_settings.set_frequency(Some(x3.value().parse().unwrap()));
 
             match topo_settings.noise_type {
                 Some(NoiseTypesUi::Simplex) => {
                     update_simplex_noise(&topo_settings);
-                    unsafe {
-                        NOISE_CHANGED = true;
-                    }
+                    topo_settings.set_signal(true);
                 }
                 Some(NoiseTypesUi::Perlin) => {
                     update_perlin_noise(&topo_settings);
-                    unsafe {
-                        NOISE_CHANGED = true;
-                    }
+                    topo_settings.set_signal(true);
                 }
                 Some(NoiseTypesUi::BillowPerlin) => {
                     update_billow_noise(&topo_settings);
-                    unsafe {
-                        NOISE_CHANGED = true;
-                    }
+                    topo_settings.set_signal(true);
                 }
                 _ => {}
             };
@@ -240,26 +216,20 @@ fn main() {
 
     ui.noise_lacunarity_input.set_callback(move |x4| {
         if x4.changed() {
-            topo_settings.noise_lacunarity = Some(x4.value().parse().unwrap());
+            topo_settings.set_lacunarity(Some(x4.value().parse().unwrap()));
 
             match topo_settings.noise_type {
                 Some(NoiseTypesUi::Simplex) => {
                     update_simplex_noise(&topo_settings);
-                    unsafe {
-                        NOISE_CHANGED = true;
-                    }
+                    topo_settings.set_signal(true);
                 }
                 Some(NoiseTypesUi::Perlin) => {
                     update_perlin_noise(&topo_settings);
-                    unsafe {
-                        NOISE_CHANGED = true;
-                    }
+                    topo_settings.set_signal(true);
                 }
                 Some(NoiseTypesUi::BillowPerlin) => {
                     update_billow_noise(&topo_settings);
-                    unsafe {
-                        NOISE_CHANGED = true;
-                    }
+                    topo_settings.set_signal(true);
                 }
                 _ => {}
             };
@@ -279,20 +249,21 @@ fn main() {
     });
 
     ui.erosion_cycles_input.set_callback(move |x7| {
+
         if x7.changed() {
             topo_settings.erosion_cycles = x7.value() as u64;
         }
     });
 
     while app.wait() {
-        unsafe {
-            if NOISE_CHANGED == true {
+        println!("noise wait: {:?}", topo_settings);
+            if topo_settings.noise_changed {
               println!("{:?}", topo_settings);
                 let img = SharedImage::load("example_images/cache.png").expect("Error loading file.");
                 ui.preview_box_topo.set_image_scaled(Some(img));
               ui.preview_box_topo.redraw();
-                NOISE_CHANGED = false;
-            }
+                topo_settings.set_signal(false);
+
         }
     }
 }
