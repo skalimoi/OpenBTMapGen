@@ -122,7 +122,7 @@ fn seed_random_do(w: &mut impl ButtonExt, seed_box: &mut impl InputExt, topo_set
             println!("{:?}", topo_settings.noise_changed);
         }
         Some(NoiseTypesUi::BillowPerlin) => {
-            update_billow_noise(& topo_settings);
+            update_billow_noise(topo_settings);
             topo_settings.set_signal(true);
             println!("{:?}",  topo_settings.noise_changed);
         }
@@ -295,6 +295,11 @@ fn main() {
                 Message::FreqInput => frequency_input_do(&mut ui.noise_freq_input, &mut topo_settings),
                 Message::LacInput => lacunarity_input_do(&mut ui.noise_lacunarity_input, &mut topo_settings),
                 _ => {}
+            }
+
+            if topo_settings.noise_changed {
+                let img = SharedImage::load("example_images/cache.png").unwrap();
+                ui.preview_box_topo.set_image_scaled(Some(img));
             }
         }
 
