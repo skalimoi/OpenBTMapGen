@@ -26,7 +26,6 @@ enum Message {
     OctaveInput,
     LacInput,
     FreqInput,
-    NoiseChanged
 }
 
 
@@ -63,6 +62,13 @@ fn update_simplex_noise(settings: &TopoSettings) {
   map.write_to_file("cache.png");
 }
 
+fn update_noise_img(w: &mut impl WidgetExt) {
+    w.set_image_scaled(None::<SharedImage>);
+    let img = SharedImage::load("example_images/cache.png").unwrap();
+    w.set_image_scaled(Some(img));
+    w.redraw();
+}
+
 fn update_billow_noise(settings: &TopoSettings) {
     let mut perlin: Billow<Perlin> = Default::default();
     perlin = perlin
@@ -74,7 +80,7 @@ fn update_billow_noise(settings: &TopoSettings) {
   if Path::new("example_images/cache.png").exists() {
       fs::remove_file("example_images/cache.png").unwrap();
   }
-  let map = PlaneMapBuilder::<Billow<Perlin>, 2>::new(perlin.clone()).set_size(230, 230).set_is_seamless(false).set_x_bounds(-1.0, 1.0).set_y_bounds(-1.0, 1.0).build();
+  let map = PlaneMapBuilder::<Billow<Perlin>, 2>::new(perlin.clone()).set_size(230, 230).set_is_seamless(false).set_x_bounds(-3.0, 3.0).set_y_bounds(-3.0, 3.0).build();
 
   map.write_to_file("cache.png");
 }
@@ -86,15 +92,12 @@ fn seed_input_do(w: &mut impl InputExt, topo_settings: &mut TopoSettings) {
         match topo_settings.noise_type {
             Some(NoiseTypesUi::Simplex) => {
                 update_simplex_noise(topo_settings);
-                topo_settings.set_signal(true);
             }
             Some(NoiseTypesUi::Perlin) => {
                 update_perlin_noise(topo_settings);
-                topo_settings.set_signal(true);
             }
             Some(NoiseTypesUi::BillowPerlin) => {
                 update_billow_noise(topo_settings);
-                topo_settings.set_signal(true);
             }
             _ => {}
         };
@@ -111,18 +114,12 @@ fn seed_random_do(w: &mut impl ButtonExt, seed_box: &mut impl InputExt, topo_set
     match  topo_settings.noise_type {
         Some(NoiseTypesUi::Simplex) => {
             update_simplex_noise( topo_settings);
-            topo_settings.set_signal(true);
-            println!("{:?}",  topo_settings.noise_changed);
         }
         Some(NoiseTypesUi::Perlin) => {
             update_perlin_noise( topo_settings);
-            topo_settings.set_signal(true);
-            println!("{:?}", topo_settings.noise_changed);
         }
         Some(NoiseTypesUi::BillowPerlin) => {
             update_billow_noise(topo_settings);
-            topo_settings.set_signal(true);
-            println!("{:?}",  topo_settings.noise_changed);
         }
         _ => {}
     };
@@ -133,17 +130,14 @@ fn aux_choice_do(topo_settings: &mut TopoSettings) {
         NoiseTypesUi::Perlin => {
             topo_settings.set_type(Some(NoiseTypesUi::Perlin));
             update_perlin_noise(topo_settings);
-            topo_settings.set_signal(true);
         },
         NoiseTypesUi::Simplex => {
             topo_settings.set_type(Some(NoiseTypesUi::Simplex));
             update_simplex_noise(topo_settings);
-            topo_settings.set_signal(true);
         },
         NoiseTypesUi::BillowPerlin => {
             topo_settings.set_type(Some(NoiseTypesUi::BillowPerlin));
             update_billow_noise(topo_settings);
-            topo_settings.set_signal(true);
         },
     }
 }
@@ -178,21 +172,21 @@ fn change_noise_type(noise_types_ui: NoiseTypesUi, topo_settings: &mut TopoSetti
 
 fn octaves_input_do(w: &mut impl InputExt, topo_settings: &mut TopoSettings) {
     if w.changed() {
-        topo_settings.set_octaves(Some(w.value().parse().unwrap()));
+        // DEBUG
+        println!("Oct value: {}", w.value());
+        //
+        topo_settings.set_octaves(Some(w.value().parse::<u32>().unwrap()));
 
         match topo_settings.noise_type {
             Some(NoiseTypesUi::Simplex) => {
                 update_simplex_noise(topo_settings);
-                topo_settings.set_signal(true);
             }
             Some(NoiseTypesUi::Perlin) => {
                 update_perlin_noise(topo_settings);
-                topo_settings.set_signal(true);
 
             }
             Some(NoiseTypesUi::BillowPerlin) => {
                 update_billow_noise(topo_settings);
-                topo_settings.set_signal(true);
             }
             _ => {}
         };
@@ -206,16 +200,13 @@ fn frequency_input_do(w: &mut impl InputExt, topo_settings: &mut TopoSettings) {
         match topo_settings.noise_type {
             Some(NoiseTypesUi::Simplex) => {
                 update_simplex_noise(topo_settings);
-                topo_settings.set_signal(true);
             }
             Some(NoiseTypesUi::Perlin) => {
                 update_perlin_noise(topo_settings);
-                topo_settings.set_signal(true);
 
             }
             Some(NoiseTypesUi::BillowPerlin) => {
                 update_billow_noise(topo_settings);
-                topo_settings.set_signal(true);
             }
             _ => {}
         };
@@ -229,16 +220,13 @@ fn lacunarity_input_do(w: &mut impl InputExt, topo_settings: &mut TopoSettings) 
         match topo_settings.noise_type {
             Some(NoiseTypesUi::Simplex) => {
                 update_simplex_noise(topo_settings);
-                topo_settings.set_signal(true);
             }
             Some(NoiseTypesUi::Perlin) => {
                 update_perlin_noise(topo_settings);
-                topo_settings.set_signal(true);
 
             }
             Some(NoiseTypesUi::BillowPerlin) => {
                 update_billow_noise(topo_settings);
-                topo_settings.set_signal(true);
             }
             _ => {}
         };
@@ -248,18 +236,20 @@ fn lacunarity_input_do(w: &mut impl InputExt, topo_settings: &mut TopoSettings) 
 
 fn main() {
 
+    //TODO check for adequate default values since results are not optimal
+
     let mut topo_settings: TopoSettings = TopoSettings {
         seed: Some(4294967295),
-        noise_type: Some(NoiseTypesUi::Simplex),
-        noise_octaves: Some(8),
-        noise_frequency: Some(0.13),
-        noise_lacunarity: Some(1.0),
+        noise_type: Some(NoiseTypesUi::BillowPerlin),
+        noise_octaves: Some(20),
+        noise_frequency: Some(3.0),
+        noise_lacunarity: Some(4.0),
         mountain_pct: 25,
         sea_pct: 5,
         min_height: -50,
         max_height: 1000,
         erosion_cycles: 0,
-        noise_changed: false
+
     };
 
     let (s, r) = app::channel::<Message>();
@@ -284,20 +274,15 @@ fn main() {
 
         if let Some(msg) = r.recv() {
             match msg {
-                Message::SimplexChoice => { change_noise_type(NoiseTypesUi::Simplex, &mut topo_settings); aux_choice_do(&mut topo_settings); },
-                Message::PerlinChoice => {change_noise_type(NoiseTypesUi::Perlin, &mut topo_settings); aux_choice_do(&mut topo_settings);}
-                Message::BillowChoice => {change_noise_type(NoiseTypesUi::BillowPerlin, &mut topo_settings); aux_choice_do(&mut topo_settings);}
-                Message::SeedRandom => seed_random_do(&mut ui.seed_random_button, &mut ui.seed_input, &mut topo_settings),
-                Message::SeedInput => seed_input_do(&mut ui.seed_input, &mut topo_settings),
-                Message::OctaveInput => octaves_input_do(&mut ui.noise_octaves_input, &mut topo_settings),
-                Message::FreqInput => frequency_input_do(&mut ui.noise_freq_input, &mut topo_settings),
-                Message::LacInput => lacunarity_input_do(&mut ui.noise_lacunarity_input, &mut topo_settings),
+                Message::SimplexChoice => { change_noise_type(NoiseTypesUi::Simplex, &mut topo_settings); aux_choice_do(&mut topo_settings); update_noise_img(&mut ui.preview_box_topo); println!("{:?}", &topo_settings);},
+                Message::PerlinChoice => {change_noise_type(NoiseTypesUi::Perlin, &mut topo_settings); aux_choice_do(&mut topo_settings); update_noise_img(&mut ui.preview_box_topo); println!("{:?}", &topo_settings);}
+                Message::BillowChoice => {change_noise_type(NoiseTypesUi::BillowPerlin, &mut topo_settings); aux_choice_do(&mut topo_settings); update_noise_img(&mut ui.preview_box_topo); println!("{:?}", &topo_settings);}
+                Message::SeedRandom => { seed_random_do(&mut ui.seed_random_button, &mut ui.seed_input, &mut topo_settings); update_noise_img(&mut ui.preview_box_topo); println!("{:?}", &topo_settings);},
+                Message::SeedInput => { seed_input_do(&mut ui.seed_input, &mut topo_settings); update_noise_img(&mut ui.preview_box_topo); println!("{:?}", &topo_settings);},
+                Message::OctaveInput => { octaves_input_do(&mut ui.noise_octaves_input, &mut topo_settings); update_noise_img(&mut ui.preview_box_topo); println!("{:?}", &topo_settings);},
+                Message::FreqInput => { frequency_input_do(&mut ui.noise_freq_input, &mut topo_settings); update_noise_img(&mut ui.preview_box_topo); println!("{:?}", &topo_settings);},
+                Message::LacInput => { lacunarity_input_do(&mut ui.noise_lacunarity_input, &mut topo_settings); update_noise_img(&mut ui.preview_box_topo); println!("{:?}", &topo_settings);},
                 _ => {}
-            }
-
-            if topo_settings.noise_changed {
-                let img = SharedImage::load("example_images/cache.png").unwrap();
-                ui.preview_box_topo.set_image_scaled(Some(img));
             }
         }
 

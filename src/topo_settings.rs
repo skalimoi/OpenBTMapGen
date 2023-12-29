@@ -17,7 +17,6 @@ pub struct TopoSettings {
     pub min_height: i32,
     pub max_height: i32,
     pub erosion_cycles: u64,
-    pub noise_changed: bool
 
 }
 
@@ -38,8 +37,5 @@ impl TopoSettings {
         self.noise_lacunarity = lac;
     }
 
-    pub fn set_signal(&mut self, is_changed: bool) {
-        self.noise_changed = is_changed;
-    }
 
 }
