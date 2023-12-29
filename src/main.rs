@@ -13,9 +13,7 @@ use rand::rngs::ThreadRng;
 use topo_settings::NoiseTypesUi;
 use crate::ui::UserInterface;
 
-mod menu_bar;
 mod topo_settings;
-mod topography_pane;
 mod ui;
 
 #[derive(Copy, Clone)]
