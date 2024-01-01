@@ -72,7 +72,7 @@ fn update_noise_img(w: &mut impl WidgetExt) {
 fn update_billow_noise(settings: &TopoSettings) {
     let mut perlin: Billow<Perlin> = Default::default();
     perlin = perlin
-  .set_seed(settings.seed.unwrap() as u32)
+  .set_seed(settings.seed.unwrap())
   .set_octaves(settings.noise_octaves.unwrap() as usize)
   .set_frequency(settings.noise_frequency.unwrap())
   .set_lacunarity(settings.noise_lacunarity.unwrap());
@@ -147,21 +147,21 @@ fn noise_choice_do(w: &mut impl MenuExt, sender: &Sender<Message>) {
         "Simplex",
         enums::Shortcut::None,
         menu::MenuFlag::Normal,
-        sender.clone(),
+        *sender,
         Message::SimplexChoice
     );
     w.add_emit(
         "Perlin",
         enums::Shortcut::None,
         menu::MenuFlag::Normal,
-        sender.clone(),
+        *sender,
         Message::PerlinChoice
     );
     w.add_emit(
         "Billowed Perlin",
         enums::Shortcut::None,
         menu::MenuFlag::Normal,
-        sender.clone(),
+        *sender,
         Message::BillowChoice
     );
 }
@@ -171,7 +171,6 @@ fn change_noise_type(noise_types_ui: NoiseTypesUi, topo_settings: &mut TopoSetti
 }
 
 fn octaves_input_do(w: &mut impl InputExt, topo_settings: &mut TopoSettings) {
-    if w.changed() {
         // DEBUG
         println!("Oct value: {}", w.value());
         //
@@ -191,11 +190,11 @@ fn octaves_input_do(w: &mut impl InputExt, topo_settings: &mut TopoSettings) {
             _ => {}
         };
     }
-}
+
 
 fn frequency_input_do(w: &mut impl InputExt, topo_settings: &mut TopoSettings) {
-    if w.changed() {
-        topo_settings.set_frequency(Some(w.value().parse().unwrap()));
+        println!("Has input changed? {}", w.changed());
+        topo_settings.set_frequency(Some(w.value().parse::<f64>().unwrap()));
 
         match topo_settings.noise_type {
             Some(NoiseTypesUi::Simplex) => {
@@ -211,7 +210,6 @@ fn frequency_input_do(w: &mut impl InputExt, topo_settings: &mut TopoSettings) {
             _ => {}
         };
     }
-}
 
 fn lacunarity_input_do(w: &mut impl InputExt, topo_settings: &mut TopoSettings) {
     if w.changed() {
@@ -239,7 +237,7 @@ fn main() {
     //TODO check for adequate default values since results are not optimal
 
     let mut topo_settings: TopoSettings = TopoSettings {
-        seed: Some(4294967295),
+        seed: Some(42949),
         noise_type: Some(NoiseTypesUi::BillowPerlin),
         noise_octaves: Some(20),
         noise_frequency: Some(3.0),
@@ -282,7 +280,6 @@ fn main() {
                 Message::OctaveInput => { octaves_input_do(&mut ui.noise_octaves_input, &mut topo_settings); update_noise_img(&mut ui.preview_box_topo); println!("{:?}", &topo_settings);},
                 Message::FreqInput => { frequency_input_do(&mut ui.noise_freq_input, &mut topo_settings); update_noise_img(&mut ui.preview_box_topo); println!("{:?}", &topo_settings);},
                 Message::LacInput => { lacunarity_input_do(&mut ui.noise_lacunarity_input, &mut topo_settings); update_noise_img(&mut ui.preview_box_topo); println!("{:?}", &topo_settings);},
-                _ => {}
             }
         }
 
