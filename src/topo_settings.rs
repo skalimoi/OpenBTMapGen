@@ -12,8 +12,8 @@ pub struct TopoSettings {
     pub noise_octaves: Option<u32>,
     pub noise_frequency: Option<f64>,
     pub noise_lacunarity: Option<f64>,
-    pub mountain_pct: u8,
-    pub sea_pct: u8,
+    pub mountain_pct: f64,
+    pub sea_pct: f64,
     pub min_height: i32,
     pub max_height: i32,
     pub erosion_cycles: u64,
@@ -36,6 +36,12 @@ impl TopoSettings {
     pub fn set_lacunarity(&mut self, lac: Option<f64>) {
         self.noise_lacunarity = lac;
     }
+    
+    pub fn set_mtn_pct(&mut self, pct: f64) { self.mountain_pct = pct}
+    pub fn set_sea_pct(&mut self, pct: f64) { self.sea_pct = pct}
+
+    pub fn set_cycles(&mut self, cycles: u64) { self.erosion_cycles = cycles }
+
 
 
 }

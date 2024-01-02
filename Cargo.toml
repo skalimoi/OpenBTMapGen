@@ -9,10 +9,15 @@ opt-level = 3
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+errorfunctions = "0.2.0"
 fltk = { git = "https://github.com/fltk-rs/fltk-rs", features = ["fltk-bundled"] }
-image = "0.24.7"
+image_crate = { package = "image", version =  "0.24.7" }
+imageproc = "0.23.0"
+map-range = "0.1.2"
+nalgebra = "0.32.3"
 noise = {version = "0.8.2", features = ["images"]}
 rand = "0.8.5"
+rand_chacha = "0.3.1"
 
 [build-dependencies]
 fl2rust = "0.5.17"

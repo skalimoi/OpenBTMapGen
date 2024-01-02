@@ -154,8 +154,11 @@ class UserInterface {open
             label {Erosion Preview} open
             xywh {15 335 230 230} box ENGRAVED_FRAME color 0 labelcolor 8
           } {}
-          Fl_Box preview_box_topo {selected
+          Fl_Box preview_box_topo {
             xywh {15 80 230 230}
+          }
+          Fl_Box preview_erosion_topo {selected
+            xywh {15 335 230 230}
           }
         }
         Fl_Group hydrography_pane {
