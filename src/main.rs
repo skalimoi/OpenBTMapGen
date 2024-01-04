@@ -1,29 +1,31 @@
 use std::fs;
-use std::io::stdout;
-use std::ops::Index;
+
+
 
 use map_range::MapRange;
 use crate::topo_settings::TopoSettings;
-use fltk::app::{modal, Sender};
-use fltk::group::Group;
-use fltk::image::{Image, PngImage, SharedImage};
+use fltk::app::{Sender};
+
+use fltk::image::{SharedImage};
 use fltk::{prelude::*, *};
-use noise::{Billow, Cache, Curve, Fbm, MultiFractal, NoiseFn, OpenSimplex, Perlin, Seedable, Simplex};
-use noise::utils::{ImageRenderer, NoiseImage, NoiseMap, NoiseMapBuilder, PlaneMapBuilder};
+use noise::{Billow, Curve, Fbm, MultiFractal, Perlin, Seedable, Simplex};
+use noise::utils::{ImageRenderer, NoiseMap, NoiseMapBuilder, PlaneMapBuilder};
 use rand::{Rng, thread_rng};
 use std::path::Path;
-use image_crate::{DynamicImage, GenericImage, ImageBuffer, Luma, Pixel, Rgb, Rgba};
-use imageproc::integral_image::ArrayData;
-use rand::rngs::ThreadRng;
+use image_crate::{ImageBuffer, Luma, Pixel};
+
+
 use topo_settings::NoiseTypesUi;
-use crate::erosion::world::World;
-use crate::ui::UserInterface;
+use crate::erosion::world::{Vec2, World};
+
 
 mod topo_settings;
 mod ui;
 mod erosion;
+mod utils;
 
-const DIMENSIONS: usize = 256;
+const DIMENSIONS: usize = 512;
+const PREV_DIMENSIONS: usize = 8192;
 
 #[derive(Copy, Clone)]
 enum Message {
@@ -38,24 +40,70 @@ enum Message {
     MtnSlider,
     SeaSlider,
     CycleInput,
-    ErodeButton
+    ErodeButton,
+    FullPreview
 }
 
-fn erode_terrain_preview(w: &mut impl WidgetExt, topo_settings: &TopoSettings) {
+fn hydro_preview_do(topo_settings: &TopoSettings) {
+    match topo_settings.noise_type.unwrap() {
+        NoiseTypesUi::Perlin => update_perlin_noise(topo_settings, PREV_DIMENSIONS),
+        NoiseTypesUi::Simplex => update_simplex_noise(topo_settings, PREV_DIMENSIONS),
+        NoiseTypesUi::BillowPerlin => update_billow_noise(topo_settings, PREV_DIMENSIONS)
+    }
+}
+
+fn erode_terrain_preview(_w: &mut impl WidgetExt, topo_settings: &TopoSettings) {
         let img = image_crate::io::Reader::open("example_images/raw.png").unwrap().decode().unwrap().into_luma16();
         let (width, height) = img.dimensions();
         let heightmap = img.into_raw();
         let mut erosion_world = World::new(heightmap, width as usize, height as usize, topo_settings.seed.unwrap() as i16);
 
-        for cycle in 0..topo_settings.erosion_cycles as i32 {
-            erosion_world.erode(width as usize);
+        for _cycle in 0..topo_settings.erosion_cycles as i32 {
+            erosion_world.erode(width as usize, 1.2);
         }
         let eroded_preview: Vec<u16> = erosion_world.map.heightmap.iter().map(|x| (x.height * 255.0) as u16).collect();
         let buffer: ImageBuffer<Luma<u16>, Vec<u16>> = ImageBuffer::from_raw(width, height, eroded_preview).unwrap();
         buffer.save("example_images/eroded_cache.png");
-
-
     }
+
+fn erode_heightmap_full(_w: &mut impl WidgetExt, topo_settings: &TopoSettings) {
+    let mut discharge_map = vec![0; (PREV_DIMENSIONS * PREV_DIMENSIONS) as usize];
+
+    let img = image_crate::io::Reader::open("example_images/raw.png").unwrap().decode().unwrap().into_luma16();
+    let (width, height) = img.dimensions();
+    let heightmap = img.into_raw();
+    let mut erosion_world = World::new(heightmap, width as usize, height as usize, topo_settings.seed.unwrap() as i16);
+
+    for _cycle in 0..topo_settings.erosion_cycles as i32 {
+        erosion_world.erode(width as usize, 8.0);
+    }
+    for i in 0..discharge_map.len() {
+        let pos = Vec2::new(i as f64 % width as f64, (i / width as usize) as f64);
+        discharge_map[i] = ((erosion_world.map.discharge(pos) + 1.0) * 0.5 * 255.0) as u8;
+    }
+    let eroded_preview: Vec<u16> = erosion_world.map.heightmap.iter().map(|x| (x.height * 255.0) as u16).collect();
+    let buffer: ImageBuffer<Luma<u16>, Vec<u16>> = ImageBuffer::from_raw(width, height, eroded_preview).unwrap();
+    buffer.save("example_images/eroded_cache_full.png");
+
+    let discharge_buffer: ImageBuffer<Luma<u8>, Vec<u8>> =
+        ImageBuffer::from_raw(width, height, discharge_map.clone()).unwrap();
+    discharge_buffer
+        .save("example_images/hydro_mask_full.png".to_string().as_str())
+        .unwrap();
+
+    let proc_water =
+        image_crate::io::Reader::open("example_images/hydro_mask_full.png".to_string().as_str())
+            .unwrap()
+            .decode()
+            .unwrap();
+    let mut gray = proc_water.to_luma8();
+    imageproc::contrast::stretch_contrast_mut(&mut gray, 130, 200);
+    gray.save("example_images/hydro_mask_full.png".to_string().as_str())
+        .unwrap();
+
+    apply_color_hydro_full();
+
+}
 
 fn update_preview_ero(w: &mut impl WidgetExt) {
     apply_color_eroded();
@@ -63,6 +111,24 @@ fn update_preview_ero(w: &mut impl WidgetExt) {
     let img = SharedImage::load("example_images/eroded_cache.png").unwrap();
     w.set_image_scaled(Some(img));
     w.redraw();
+}
+
+fn update_hydro_prev(w: &mut impl WidgetExt, left: bool) {
+    apply_color_eroded();
+    w.set_image_scaled(None::<SharedImage>);
+
+    match left {
+        true => {
+            let img = SharedImage::load("example_images/eroded_cache_full.png").unwrap();
+            w.set_image_scaled(Some(img));
+            w.redraw();
+        },
+        false => {
+            let img = SharedImage::load("example_images/hydro_mask_full.png").unwrap();
+            w.set_image_scaled(Some(img));
+            w.redraw();
+        }
+    };
 }
 
 fn apply_variations_perlin(source: Fbm<Perlin>, mtn: f64, sea: f64) -> Curve<f64, Fbm<Perlin>, 2>
@@ -121,17 +187,40 @@ fn apply_color_eroded() {
             map.set_value(x, y, output as f64);
         }
     }
-    let mut r = ImageRenderer::new().set_gradient(gradient).render(&map);
-
     if Path::new("example_images/eroded_cache.png").exists() {
         fs::remove_file("example_images/eroded_cache.png").unwrap();
     }
 
-    r.write_to_file("eroded_cache.png");
+    let mut r = ImageRenderer::new().set_gradient(gradient).set_light_elevation(Default::default()).set_light_color(Default::default()).set_light_azimuth(Default::default()).set_light_brightness(Default::default()).set_light_contrast(Default::default()).set_light_intensity(Default::default());
+    r.disable_light();
+    let b = r.render(&map);
+    utils::write_to_file(&b, "eroded_cache.png");
+}
+
+fn apply_color_hydro_full() {
+    let gradient = noise::utils::ColorGradient::new().build_terrain_gradient();
+    let eroded_image = image_crate::open("example_images/eroded_cache_full.png").unwrap().into_luma16();
+
+    let mut map = NoiseMap::new(PREV_DIMENSIONS, PREV_DIMENSIONS);
+
+    for x in 0..PREV_DIMENSIONS {
+        for y in 0..PREV_DIMENSIONS {
+            let pixel = eroded_image.get_pixel(x as u32, y as u32).channels().first().unwrap();
+            let p_i = *pixel as f32;
+            let output = p_i.map_range(0.0..32767.0, -1.0..-0.01);
+            map.set_value(x, y, output as f64);
+        }
+    }
+    let r = ImageRenderer::new().set_gradient(gradient).render(&map);
+
+    if Path::new("example_images/eroded_cache_full.png").exists() {
+        fs::remove_file("example_images/eroded_cache_full.png").unwrap();
+    }
+    utils::write_to_file(&r, "eroded_cache.png");
 
 }
 
-fn update_perlin_noise(settings: &TopoSettings) {
+fn update_perlin_noise(settings: &TopoSettings, dimensions: usize) {
     let mut perlin: Fbm<Perlin> = Default::default();
     perlin = perlin
         .set_seed(settings.seed.unwrap())
@@ -146,7 +235,7 @@ fn update_perlin_noise(settings: &TopoSettings) {
     if Path::new("example_images/cache.png").exists() {
         fs::remove_file("example_images/cache.png").unwrap();
     }
-  let map = PlaneMapBuilder::<Curve<f64, Fbm<Perlin>, 2>, 2>::new(curved).set_size(DIMENSIONS, DIMENSIONS).set_is_seamless(false).set_x_bounds(-1.0, 1.0).set_y_bounds(-1.0, 1.0).build();
+  let map = PlaneMapBuilder::<Curve<f64, Fbm<Perlin>, 2>, 2>::new(curved).set_size(dimensions, dimensions).set_is_seamless(false).set_x_bounds(-1.0, 1.0).set_y_bounds(-1.0, 1.0).build();
 
     let gradient = noise::utils::ColorGradient::new().build_terrain_gradient();
     let renderer = ImageRenderer::new().set_gradient(gradient).render(&map);
@@ -157,11 +246,11 @@ fn update_perlin_noise(settings: &TopoSettings) {
     //     }
     // }
 
-    map.write_to_file("raw.png");
-    renderer.write_to_file("cache.png");
+    utils::write_map_to_file(&map, "raw.png");
+    utils::write_to_file(&renderer, "cache.png");
 }
 
-fn update_simplex_noise(settings: &TopoSettings) {
+fn update_simplex_noise(settings: &TopoSettings, dimensions: usize) {
     let mut simplex: Fbm<Simplex> = Default::default();
     simplex = simplex
   .set_seed(settings.seed.unwrap() as u32)
@@ -176,13 +265,13 @@ fn update_simplex_noise(settings: &TopoSettings) {
     if Path::new("example_images/cache.png").exists() {
         fs::remove_file("example_images/cache.png").unwrap();
     }
-    let map = PlaneMapBuilder::<Curve<f64, Fbm<Simplex>, 2>, 2>::new(curved).set_size(DIMENSIONS, DIMENSIONS).set_is_seamless(false).set_x_bounds(-1.0, 1.0).set_y_bounds(-1.0, 1.0).build();
+    let map = PlaneMapBuilder::<Curve<f64, Fbm<Simplex>, 2>, 2>::new(curved).set_size(dimensions, dimensions).set_is_seamless(false).set_x_bounds(-1.0, 1.0).set_y_bounds(-1.0, 1.0).build();
 
     let gradient = noise::utils::ColorGradient::new().build_terrain_gradient();
     let renderer = ImageRenderer::new().set_gradient(gradient).render(&map);
 
-    map.write_to_file("raw.png");
-    renderer.write_to_file("cache.png");
+    utils::write_map_to_file(&map, "raw.png");
+    utils::write_to_file(&renderer, "cache.png");
 }
 
 fn update_noise_img(w: &mut impl WidgetExt) {
@@ -192,7 +281,7 @@ fn update_noise_img(w: &mut impl WidgetExt) {
     w.redraw();
 }
 
-fn update_billow_noise(settings: &TopoSettings) {
+fn update_billow_noise(settings: &TopoSettings, dimensions: usize) {
     let mut perlin: Billow<Perlin> = Default::default();
     perlin = perlin
   .set_seed(settings.seed.unwrap())
@@ -207,13 +296,13 @@ fn update_billow_noise(settings: &TopoSettings) {
     if Path::new("example_images/cache.png").exists() {
         fs::remove_file("example_images/cache.png").unwrap();
     }
-    let map = PlaneMapBuilder::<Curve<f64, Billow<Perlin>, 2>, 2>::new(curved).set_size(DIMENSIONS, DIMENSIONS).set_is_seamless(false).set_x_bounds(-1.0, 1.0).set_y_bounds(-1.0, 1.0).build();
+    let map = PlaneMapBuilder::<Curve<f64, Billow<Perlin>, 2>, 2>::new(curved).set_size(dimensions, dimensions).set_is_seamless(false).set_x_bounds(-1.0, 1.0).set_y_bounds(-1.0, 1.0).build();
 
     let gradient = noise::utils::ColorGradient::new().build_terrain_gradient();
     let renderer = ImageRenderer::new().set_gradient(gradient).render(&map);
 
-    map.write_to_file("raw.png");
-    renderer.write_to_file("cache.png");
+    utils::write_map_to_file(&map, "raw.png");
+    utils::write_to_file(&renderer, "cache.png");
 }
 
 fn seed_input_do(w: &mut impl InputExt, topo_settings: &mut TopoSettings) {
@@ -222,13 +311,13 @@ fn seed_input_do(w: &mut impl InputExt, topo_settings: &mut TopoSettings) {
 
         match topo_settings.noise_type {
             Some(NoiseTypesUi::Simplex) => {
-                update_simplex_noise(topo_settings);
+                update_simplex_noise(topo_settings, DIMENSIONS);
             }
             Some(NoiseTypesUi::Perlin) => {
-                update_perlin_noise(topo_settings);
+                update_perlin_noise(topo_settings, DIMENSIONS);
             }
             Some(NoiseTypesUi::BillowPerlin) => {
-                update_billow_noise(topo_settings);
+                update_billow_noise(topo_settings, DIMENSIONS);
             }
             _ => {}
         };
@@ -236,7 +325,7 @@ fn seed_input_do(w: &mut impl InputExt, topo_settings: &mut TopoSettings) {
     }
 }
 
-fn seed_random_do(w: &mut impl ButtonExt, seed_box: &mut impl InputExt, topo_settings: &mut TopoSettings) {
+fn seed_random_do(_w: &mut impl ButtonExt, seed_box: &mut impl InputExt, topo_settings: &mut TopoSettings) {
     let mut rng = thread_rng();
     let seed: u32 = rng.gen_range(u32::MIN..u32::MAX);
     seed_box.set_value(&format!("{}", seed));
@@ -244,13 +333,13 @@ fn seed_random_do(w: &mut impl ButtonExt, seed_box: &mut impl InputExt, topo_set
 
     match  topo_settings.noise_type {
         Some(NoiseTypesUi::Simplex) => {
-            update_simplex_noise( topo_settings);
+            update_simplex_noise( topo_settings, DIMENSIONS);
         }
         Some(NoiseTypesUi::Perlin) => {
-            update_perlin_noise( topo_settings);
+            update_perlin_noise( topo_settings, DIMENSIONS);
         }
         Some(NoiseTypesUi::BillowPerlin) => {
-            update_billow_noise(topo_settings);
+            update_billow_noise(topo_settings, DIMENSIONS);
         }
         _ => {}
     };
@@ -260,15 +349,15 @@ fn aux_choice_do(topo_settings: &mut TopoSettings) {
     match topo_settings.noise_type.unwrap() {
         NoiseTypesUi::Perlin => {
             topo_settings.set_type(Some(NoiseTypesUi::Perlin));
-            update_perlin_noise(topo_settings);
+            update_perlin_noise(topo_settings, DIMENSIONS);
         },
         NoiseTypesUi::Simplex => {
             topo_settings.set_type(Some(NoiseTypesUi::Simplex));
-            update_simplex_noise(topo_settings);
+            update_simplex_noise(topo_settings, DIMENSIONS);
         },
         NoiseTypesUi::BillowPerlin => {
             topo_settings.set_type(Some(NoiseTypesUi::BillowPerlin));
-            update_billow_noise(topo_settings);
+            update_billow_noise(topo_settings, DIMENSIONS);
         },
     }
 }
@@ -309,14 +398,14 @@ fn octaves_input_do(w: &mut impl InputExt, topo_settings: &mut TopoSettings) {
 
         match topo_settings.noise_type {
             Some(NoiseTypesUi::Simplex) => {
-                update_simplex_noise(topo_settings);
+                update_simplex_noise(topo_settings, DIMENSIONS);
             }
             Some(NoiseTypesUi::Perlin) => {
-                update_perlin_noise(topo_settings);
+                update_perlin_noise(topo_settings, DIMENSIONS);
 
             }
             Some(NoiseTypesUi::BillowPerlin) => {
-                update_billow_noise(topo_settings);
+                update_billow_noise(topo_settings, DIMENSIONS);
             }
             _ => {}
         };
@@ -329,14 +418,14 @@ fn frequency_input_do(w: &mut impl InputExt, topo_settings: &mut TopoSettings) {
 
         match topo_settings.noise_type {
             Some(NoiseTypesUi::Simplex) => {
-                update_simplex_noise(topo_settings);
+                update_simplex_noise(topo_settings, DIMENSIONS);
             }
             Some(NoiseTypesUi::Perlin) => {
-                update_perlin_noise(topo_settings);
+                update_perlin_noise(topo_settings, DIMENSIONS);
 
             }
             Some(NoiseTypesUi::BillowPerlin) => {
-                update_billow_noise(topo_settings);
+                update_billow_noise(topo_settings, DIMENSIONS);
             }
             _ => {}
         };
@@ -347,14 +436,14 @@ fn lacunarity_input_do(w: &mut impl InputExt, topo_settings: &mut TopoSettings) 
 
         match topo_settings.noise_type {
             Some(NoiseTypesUi::Simplex) => {
-                update_simplex_noise(topo_settings);
+                update_simplex_noise(topo_settings, DIMENSIONS);
             }
             Some(NoiseTypesUi::Perlin) => {
-                update_perlin_noise(topo_settings);
+                update_perlin_noise(topo_settings, DIMENSIONS);
 
             }
             Some(NoiseTypesUi::BillowPerlin) => {
-                update_billow_noise(topo_settings);
+                update_billow_noise(topo_settings, DIMENSIONS);
             }
             _ => {}
         };
@@ -364,14 +453,14 @@ fn mtn_slider_do(w: &mut impl ValuatorExt, topo_settings: &mut TopoSettings) {
     topo_settings.set_mtn_pct(w.value());
     match topo_settings.noise_type {
         Some(NoiseTypesUi::Simplex) => {
-            update_simplex_noise(topo_settings);
+            update_simplex_noise(topo_settings, DIMENSIONS);
         }
         Some(NoiseTypesUi::Perlin) => {
-            update_perlin_noise(topo_settings);
+            update_perlin_noise(topo_settings, DIMENSIONS);
 
         }
         Some(NoiseTypesUi::BillowPerlin) => {
-            update_billow_noise(topo_settings);
+            update_billow_noise(topo_settings, DIMENSIONS);
         }
         _ => {}
     };
@@ -380,14 +469,14 @@ fn sea_slider_do(w: &mut impl ValuatorExt, topo_settings: &mut TopoSettings) {
     topo_settings.set_sea_pct(w.value());
     match topo_settings.noise_type {
         Some(NoiseTypesUi::Simplex) => {
-            update_simplex_noise(topo_settings);
+            update_simplex_noise(topo_settings, DIMENSIONS);
         }
         Some(NoiseTypesUi::Perlin) => {
-            update_perlin_noise(topo_settings);
+            update_perlin_noise(topo_settings, DIMENSIONS);
 
         }
         Some(NoiseTypesUi::BillowPerlin) => {
-            update_billow_noise(topo_settings);
+            update_billow_noise(topo_settings, DIMENSIONS);
         }
         _ => {}
     };
@@ -419,7 +508,7 @@ fn main() {
 
     let app = app::App::default();
     let mut ui = ui::UserInterface::make_window();
-    let mut win = ui.main_window.clone();
+    let _win = ui.main_window.clone();
 
     ui.seed_random_button.emit(s, Message::SeedRandom);
 
@@ -441,6 +530,8 @@ fn main() {
 
     ui.erode_terrain_button.emit(s, Message::ErodeButton);
 
+    ui.generate_hydro_prev.emit(s, Message::FullPreview);
+
     while app.wait() {
 
         if let Some(msg) = r.recv() {
@@ -456,7 +547,8 @@ fn main() {
                 Message::MtnSlider => { mtn_slider_do(&mut ui.high_elev_slider, &mut topo_settings); update_noise_img(&mut ui.preview_box_topo); println!("{:?}", &topo_settings); },
                 Message::SeaSlider => {sea_slider_do(&mut ui.sea_elev_slider, &mut topo_settings); update_noise_img(&mut ui.preview_box_topo); println!("{:?}", &topo_settings);},
                 Message::CycleInput => { cycle_input_do(&mut ui.erosion_cycles_input, &mut topo_settings) },
-                Message::ErodeButton => { erode_terrain_preview(&mut ui.topo_ero_preview, &mut topo_settings); update_preview_ero(&mut ui.preview_erosion_topo); }
+                Message::ErodeButton => { erode_terrain_preview(&mut ui.topo_ero_preview, &mut topo_settings); update_preview_ero(&mut ui.preview_erosion_topo); },
+                Message::FullPreview => { hydro_preview_do(&topo_settings); erode_heightmap_full(&mut ui.generate_hydro_prev, &mut topo_settings); update_hydro_prev(&mut ui.hydro_preview, true); update_hydro_prev(&mut ui.hydro_mask_preview, false); }
             }
         }
 

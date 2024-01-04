@@ -8,7 +8,7 @@ class UserInterface {open
   } {
     Fl_Window main_window {
       label {OpenBattlesim Map Generator} open
-      xywh {877 258 870 579} type Double visible
+      xywh {861 252 870 579} type Double visible
     } {
       Fl_Menu_Bar menu_bar {open
         xywh {0 0 870 30}
@@ -61,7 +61,7 @@ class UserInterface {open
         }
         Fl_Group topography_pane {
           label Topography open
-          xywh {0 55 870 525}
+          xywh {0 55 870 525} hide
         } {
           Fl_Group first_group {open
             xywh {0 60 760 520} box BORDER_BOX
@@ -157,25 +157,37 @@ class UserInterface {open
           Fl_Box preview_box_topo {
             xywh {15 80 230 230}
           }
-          Fl_Box preview_erosion_topo {selected
+          Fl_Box preview_erosion_topo {
             xywh {15 335 230 230}
           }
         }
         Fl_Group hydrography_pane {
-          label Hydrography
-          xywh {0 60 895 520} hide
+          label Hydrography open
+          xywh {0 60 895 520}
         } {
           Fl_Group {} {open
             xywh {0 60 870 520} box BORDER_BOX
           } {}
-          Fl_Group hydro_preview {
+          Fl_Group {} {
             label Preview open
-            xywh {19 125 400 400} box ENGRAVED_FRAME color 0 labelcolor 8
-          } {}
-          Fl_Group hydro_mask_preview {
+            xywh {19 125 401 400} box ENGRAVED_FRAME color 0 labelcolor 8
+          } {
+            Fl_Box hydro_preview {
+              xywh {20 125 400 400}
+            }
+          }
+          Fl_Group {} {
             label {Watershed Preview} open
             xywh {450 125 400 400} box ENGRAVED_FRAME color 0 labelcolor 8
-          } {}
+          } {
+            Fl_Box hydro_mask_preview {selected
+              xywh {450 125 400 400}
+            }
+          }
+          Fl_Button generate_hydro_prev {
+            label Show
+            xywh {400 82 70 25} box THIN_UP_BOX down_box THIN_DOWN_BOX color 247
+          }
         }
         Fl_Group weather_pane {
           label Weather
