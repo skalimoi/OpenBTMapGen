@@ -183,7 +183,7 @@ fn apply_color_eroded() {
         for y in 0..DIMENSIONS {
             let pixel = eroded_image.get_pixel(x as u32, y as u32).channels().first().unwrap();
             let p_i = *pixel as f32;
-            let output = p_i.map_range(0.0..32767.0, -1.0..-0.01);
+            let output = p_i.map_range(0.0..32767.0, -1.0..1.0);
             map.set_value(x, y, output as f64);
         }
     }
