@@ -439,10 +439,10 @@ fn apply_color_hydro_full() {
         .unwrap()
         .into_luma16();
 
-    let mut map = NoiseMap::new(PREV_DIMENSIONS, PREV_DIMENSIONS);
+    let mut map = NoiseMap::new(8192, 8192);
 
-    for x in 0..PREV_DIMENSIONS {
-        for y in 0..PREV_DIMENSIONS {
+    for x in 0..8192 {
+        for y in 0..8192 {
             let pixel = eroded_image
                 .get_pixel(x as u32, y as u32)
                 .channels()
