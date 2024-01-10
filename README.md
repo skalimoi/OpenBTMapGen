@@ -7,3 +7,5 @@ It can generate 2^n sized maps from various types of noise and apply erosive for
 ## Development note
 
 Currently only the topography systems (erosion, noise generation and visualization) are finished. The weather editor is on the works.
+
+The erosion system (SimpleHydrology) was gracefully implemented by weigert on ![this repository](https://github.com/weigert/SimpleHydrology) and was ported to Rust ![here](https://github.com/skalimoi/SimpleHydrologyRust).
