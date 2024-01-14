@@ -1,9 +1,8 @@
-use crate::topo_settings::TopoSettings;
+use crate::topo_settings::{TopoSettings};
 use fltk::app::Sender;
 use image_crate::imageops::FilterType;
 use map_range::MapRange;
 use std::ops::Add;
-
 use fltk::image::SharedImage;
 use fltk::{prelude::*, *};
 use image_crate::{ImageBuffer, Luma, Pixel, DynamicImage};
@@ -11,6 +10,15 @@ use noise::utils::{ImageRenderer, NoiseMap, NoiseMapBuilder, PlaneMapBuilder};
 use noise::{Billow, Curve, Fbm, MultiFractal, Perlin, Seedable, Simplex};
 use rand::{thread_rng, Rng};
 use std::path::Path;
+use std::sync::Arc;
+use std::thread::{spawn, Thread};
+use std::time::Instant;
+use fltk::draw::gl_start;
+use fltk::enums::Mode;
+use fltk::window::experimental::GlWidgetWindow;
+use fltk::window::{GlContext, GlutWindow, GlWindow};
+use three_d::{Camera, ClearState, ColorMaterial, Context, CpuMesh, degrees, DepthTexture2D, Gm, HasContext, HeadlessContext, Interpolation, Mat4, Mesh, Positions, radians, RenderTarget, Srgba, SurfaceSettings, Texture2D, vec3, Viewport, WindowedContext, Wrapping};
+
 
 use crate::erosion::world::{Vec2, World};
 use topo_settings::NoiseTypesUi;
@@ -38,6 +46,7 @@ enum Message {
     CycleInput,
     ErodeButton,
     FullPreview,
+    InitThreeD,
 }
 
 fn hydro_preview_do(topo_settings: &TopoSettings) {
@@ -728,6 +737,7 @@ fn cycle_input_do(w: &mut impl ValuatorExt, topo_settings: &mut TopoSettings) {
     topo_settings.set_cycles(w.value() as u64);
 }
 
+
 fn main() {
     //TODO check for adequate default values since results are not optimal
 
@@ -748,7 +758,78 @@ fn main() {
 
     let app = app::App::default();
     let mut ui = ui::UserInterface::make_window();
-    let _win = ui.main_window.clone();
+    let mut win = ui.main_window.clone();
+    let (x, y, w, h) = (ui.weather_preview.x(), ui.weather_preview.y(), ui.weather_preview.w(), ui.weather_preview.h());
+    // create gl window
+    let mut gl_widget = GlutWindow::new(x, y, w, h, None);
+    // let mut gl_win = GlutWindow::new(x, y, w, h, None);
+    gl_widget.set_mode(fltk::enums::Mode::Opengl3);
+    gl_widget.end();
+    win.end();
+    win.show();
+    gl_widget.show();
+
+
+    // three_d viewport
+    let viewport = Viewport {
+        x,
+        y,
+        width: w as u32,
+        height: h as u32,
+    };
+
+    /////////////
+
+    let gl = unsafe {
+        three_d::context::Context::from_loader_function(|s| gl_widget.get_proc_address(s) as *const _)
+    };
+
+    // and this is three_d context
+    let context = Context::from_gl_context(Arc::new(gl)).unwrap();
+
+    let camera = Camera::new_perspective(
+        viewport,
+        vec3(0.0, 0.0, 2.0),
+        vec3(0.0, 0.0, 0.0),
+        vec3(0.0, 1.0, 0.0),
+        degrees(60.0),
+        0.1,
+        10.0,
+    );
+
+    // Create the scene - a single colored triangle
+    let mut model = Gm::new(
+        Mesh::new(
+            &context,
+            &CpuMesh {
+                positions: Positions::F32(vec![
+                    vec3(0.5, -0.5, 0.0),  // bottom right
+                    vec3(-0.5, -0.5, 0.0), // bottom left
+                    vec3(0.0, 0.5, 0.0),   // top
+                ]),
+                colors: Some(vec![
+                    Srgba::new(255, 0, 0, 255), // bottom right
+                    Srgba::new(0, 255, 0, 255), // bottom left
+                    Srgba::new(0, 0, 255, 255), // top
+                ]),
+                ..Default::default()
+            },
+        ),
+        ColorMaterial::default(),
+    );
+    let mut frame = 0;
+
+    // gl_win.draw(move |_| {
+    //     context.set_viewport(viewport);
+    //     let rt = RenderTarget::screen(&context, viewport.width, viewport.height);
+    //     rt
+    //         // Clear color and depth of the render target
+    //         .clear(ClearState::color_and_depth(0.8, 0.8, 0.8, 1.0, 1.0))
+    //         // Render the triangle with the per vertex colors defined at construction
+    //         .render(&camera, &model, &[]);
+    // });
+
+    /////////////
 
     ui.seed_random_button.emit(s, Message::SeedRandom);
 
@@ -771,6 +852,8 @@ fn main() {
     ui.erode_terrain_button.emit(s, Message::ErodeButton);
 
     ui.generate_hydro_prev.emit(s, Message::FullPreview);
+
+    ui.generate_weather_button.emit(s, Message::InitThreeD);
 
     while app.wait() {
         if let Some(msg) = r.recv() {
@@ -845,36 +928,27 @@ fn main() {
                     update_hydro_prev(&mut ui.hydro_preview, true);
                     update_hydro_prev(&mut ui.hydro_mask_preview, false);
                 }
+                Message::InitThreeD => {
+                    // three_d context is glow context so it's not necessary to import glow twice
+
+    }
             }
+        }
+        {
+            gl_widget.make_current();
+            context.set_viewport(viewport);
+            model.set_transformation(Mat4::from_angle_y(radians(frame as f32 * 0.6)));
+            let rt = RenderTarget::screen(&context, viewport.width, viewport.height);
+            rt
+                // Clear color and depth of the render target
+                .clear(ClearState::color_and_depth(0.8, 0.8, 0.8, 1.0, 1.0))
+                // Render the triangle with the per vertex colors defined at construction
+                .render(&camera, &model, &[]);
+            frame += 1;
+            app::sleep(0.10);
+            gl_widget.redraw();
         }
     }
 }
 
-//
-// unsafe {
-// if TOPO_SETTINGS.noise_changed {
-// println!("{:?}", TOPO_SETTINGS);
-// ui.preview_box_topo.set_image_scaled(Some(img));
-// ui.preview_box_topo.redraw();
-// TOPO_SETTINGS.set_signal(false);
-// }
-// }
 
-// ui.min_height_input.set_callback(move |x5| {
-//     if x5.changed() {
-//         topo_settings.min_height = x5.value() as i32;
-//     }
-// });
-//
-// ui.max_height_input.set_callback(move |x6| {
-//     if x6.changed() {
-//         topo_settings.max_height = x6.value() as i32;
-//     }
-// });
-//
-// ui.erosion_cycles_input.set_callback(move |x7| {
-//
-//     if x7.changed() {
-//         topo_settings.erosion_cycles = x7.value() as u64;
-//     }
-// });

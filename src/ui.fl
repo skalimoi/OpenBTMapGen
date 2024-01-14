@@ -7,8 +7,8 @@ class UserInterface {open
   Function {make_window()} {open
   } {
     Fl_Window main_window {
-      label {OpenBattlesim Map Generator} open
-      xywh {861 252 870 579} type Double visible
+      label {OpenBattlesim Map Generator} open selected
+      xywh {392 262 870 579} type Single visible
     } {
       Fl_Menu_Bar menu_bar {open
         xywh {0 0 870 30}
@@ -163,7 +163,7 @@ class UserInterface {open
         }
         Fl_Group hydrography_pane {
           label Hydrography open
-          xywh {0 60 895 520}
+          xywh {0 60 895 520} hide
         } {
           Fl_Group {} {open
             xywh {0 60 870 520} box BORDER_BOX
@@ -180,7 +180,7 @@ class UserInterface {open
             label {Watershed Preview} open
             xywh {450 125 400 400} box ENGRAVED_FRAME color 0 labelcolor 8
           } {
-            Fl_Box hydro_mask_preview {selected
+            Fl_Box hydro_mask_preview {
               xywh {450 125 400 400}
             }
           }
@@ -190,16 +190,21 @@ class UserInterface {open
           }
         }
         Fl_Group weather_pane {
-          label Weather
-          xywh {0 60 870 520} hide
+          label Weather open
+          xywh {0 60 870 520}
         } {
           Fl_Group {} {open
             xywh {0 60 870 520} box BORDER_BOX
           } {
             Fl_Group weather_preview {
               label {Grid Preview} open
-              xywh {28 99 445 445} box BORDER_FRAME color 37 labelcolor 8
-            } {}
+              xywh {28 99 447 446} box BORDER_FRAME color 37 labelcolor 8
+            } {
+              Fl_Box render_target {
+                label label
+                xywh {29 100 445 445} labeltype NO_LABEL
+              }
+            }
             Fl_Group {} {open
               xywh {500 60 370 520} box FLAT_BOX align 192
             } {

@@ -10,7 +10,7 @@ opt-level = 3
 
 [dependencies]
 errorfunctions = "0.2.0"
-fltk = { git = "https://github.com/fltk-rs/fltk-rs", features = ["fltk-bundled"] }
+fltk = { git = "https://github.com/fltk-rs/fltk-rs", features = ["enable-glwindow"] }
 image_crate = { package = "image", version =  "0.24.7" }
 imageproc = "0.23.0"
 map-range = "0.1.2"
@@ -18,6 +18,8 @@ nalgebra = "0.32.3"
 noise = {version = "0.8.2", features = ["images"]}
 rand = "0.8.5"
 rand_chacha = "0.3.1"
+three-d = { version = "0.16.3", features=["headless"] }
+tokio = { version = "1.0.0", features = ["rt", "rt-multi-thread", "macros"] }
 
 [build-dependencies]
 fl2rust = "0.5.17"
