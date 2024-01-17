@@ -7,11 +7,11 @@ class UserInterface {open
   Function {make_window()} {open
   } {
     Fl_Window main_window {
-      label {OpenBattlesim Map Generator} open selected
+      label {OpenBattlesim Map Generator} open
       xywh {392 262 870 579} type Single visible
     } {
       Fl_Menu_Bar menu_bar {open
-        xywh {0 0 870 30}
+        xywh {-1 0 870 30}
       } {
         Submenu file_toolbar_submenu {
           label File open
@@ -334,6 +334,12 @@ class UserInterface {open
           label Misc open
           xywh {0 60 870 520} hide
         } {}
+      }
+      Fl_Button turn_right_vis {
+        xywh {503 107 35 35}
+      }
+      Fl_Button turn_left_vis {
+        xywh {503 153 35 35}
       }
     }
     comment {En el preview pane un panel de zoom, otro abajo con x e y y cosas como value} {in_source in_header

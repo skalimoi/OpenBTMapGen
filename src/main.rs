@@ -5,19 +5,14 @@ use map_range::MapRange;
 use std::ops::Add;
 use fltk::image::SharedImage;
 use fltk::{prelude::*, *};
-use image_crate::{ImageBuffer, Luma, Pixel, DynamicImage};
+use image_crate::{ImageBuffer, Luma, Pixel, DynamicImage, EncodableLayout};
 use noise::utils::{ImageRenderer, NoiseMap, NoiseMapBuilder, PlaneMapBuilder};
 use noise::{Billow, Curve, Fbm, MultiFractal, Perlin, Seedable, Simplex};
 use rand::{thread_rng, Rng};
 use std::path::Path;
 use std::sync::Arc;
-use std::thread::{spawn, Thread};
-use std::time::Instant;
-use fltk::draw::gl_start;
-use fltk::enums::Mode;
-use fltk::window::experimental::GlWidgetWindow;
 use fltk::window::{GlContext, GlutWindow, GlWindow};
-use three_d::{Camera, ClearState, ColorMaterial, Context, CpuMesh, degrees, DepthTexture2D, Gm, HasContext, HeadlessContext, Interpolation, Mat4, Mesh, Positions, radians, RenderTarget, Srgba, SurfaceSettings, Texture2D, vec3, Viewport, WindowedContext, Wrapping};
+use three_d::{AmbientLight, Camera, ClearState, ColorMaterial, Context, CpuMaterial, CpuMesh, CpuTexture, degrees, DepthTexture2D, DirectionalLight, FirstPersonControl, Gm, HasContext, HeadlessContext, Interpolation, LightingModel, Mat4, Mesh, OrbitControl, PhysicalMaterial, Positions, radians, RenderTarget, Srgba, SurfaceSettings, Terrain, Texture2D, TextureData, vec3, Vec3, Viewport, WindowedContext, Wrapping};
 
 
 use crate::erosion::world::{Vec2, World};
@@ -764,21 +759,21 @@ fn main() {
     let mut gl_widget = GlutWindow::new(x, y, w, h, None);
     // let mut gl_win = GlutWindow::new(x, y, w, h, None);
     gl_widget.set_mode(fltk::enums::Mode::Opengl3);
-    gl_widget.end();
+    ui.weather_preview.add(&gl_widget);
     win.end();
+    gl_widget.end();
     win.show();
     gl_widget.show();
 
+    /////////////
 
-    // three_d viewport
     let viewport = Viewport {
-        x,
-        y,
+        x: (0-x) + 30, // don't know why tf it must be like this in order for the viewport to be aligned with the widget
+        y: 0-y,
         width: w as u32,
         height: h as u32,
     };
 
-    /////////////
 
     let gl = unsafe {
         three_d::context::Context::from_loader_function(|s| gl_widget.get_proc_address(s) as *const _)
@@ -787,47 +782,40 @@ fn main() {
     // and this is three_d context
     let context = Context::from_gl_context(Arc::new(gl)).unwrap();
 
-    let camera = Camera::new_perspective(
+    let mut camera = Camera::new_perspective(
         viewport,
-        vec3(0.0, 0.0, 2.0),
+        vec3(256.0, 512.0, 512.0),
         vec3(0.0, 0.0, 0.0),
         vec3(0.0, 1.0, 0.0),
-        degrees(60.0),
+        degrees(45.0),
         0.1,
-        10.0,
+        5000.0,
     );
 
-    // Create the scene - a single colored triangle
-    let mut model = Gm::new(
-        Mesh::new(
-            &context,
-            &CpuMesh {
-                positions: Positions::F32(vec![
-                    vec3(0.5, -0.5, 0.0),  // bottom right
-                    vec3(-0.5, -0.5, 0.0), // bottom left
-                    vec3(0.0, 0.5, 0.0),   // top
-                ]),
-                colors: Some(vec![
-                    Srgba::new(255, 0, 0, 255), // bottom right
-                    Srgba::new(0, 255, 0, 255), // bottom left
-                    Srgba::new(0, 0, 255, 255), // top
-                ]),
-                ..Default::default()
-            },
+    let mut control = FirstPersonControl::new(0.01);
+
+    let terrain_material = PhysicalMaterial::new_opaque(&context, &CpuMaterial::default());
+
+    let heightmap_opt_dyn = image_crate::open("example_images/raw.png").unwrap();
+
+    let heightmap_opt = heightmap_opt_dyn.to_luma16();
+
+    let ambient = AmbientLight::new(&context, 0.1, Srgba::WHITE);
+    let directional = DirectionalLight::new(&context, 0.4, Srgba::WHITE, &Vec3::new(0.0, -1.0, 100.0));
+    let terrain = Terrain::new(
+        &context,
+        terrain_material,
+        Arc::new(
+            move |x, y| {
+                *heightmap_opt.get_pixel((x) as u32, (y) as u32).channels().first().unwrap() as f32 * 0.01
+            }
         ),
-        ColorMaterial::default(),
+        512.0,
+        1.0,
+        three_d::prelude::Vec2::new(255.0, 255.0)
     );
-    let mut frame = 0;
 
-    // gl_win.draw(move |_| {
-    //     context.set_viewport(viewport);
-    //     let rt = RenderTarget::screen(&context, viewport.width, viewport.height);
-    //     rt
-    //         // Clear color and depth of the render target
-    //         .clear(ClearState::color_and_depth(0.8, 0.8, 0.8, 1.0, 1.0))
-    //         // Render the triangle with the per vertex colors defined at construction
-    //         .render(&camera, &model, &[]);
-    // });
+    let mut frame = 0;
 
     /////////////
 
@@ -937,13 +925,13 @@ fn main() {
         {
             gl_widget.make_current();
             context.set_viewport(viewport);
-            model.set_transformation(Mat4::from_angle_y(radians(frame as f32 * 0.6)));
+            camera.set_default_tone_and_color_mapping();
             let rt = RenderTarget::screen(&context, viewport.width, viewport.height);
             rt
                 // Clear color and depth of the render target
                 .clear(ClearState::color_and_depth(0.8, 0.8, 0.8, 1.0, 1.0))
                 // Render the triangle with the per vertex colors defined at construction
-                .render(&camera, &model, &[]);
+                .render(&camera, &terrain, &[&ambient, &directional]);
             frame += 1;
             app::sleep(0.10);
             gl_widget.redraw();
