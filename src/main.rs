@@ -12,7 +12,7 @@ use rand::{thread_rng, Rng};
 use std::path::Path;
 use std::sync::Arc;
 use fltk::window::{GlContext, GlutWindow, GlWindow};
-use three_d::{AmbientLight, Camera, ClearState, ColorMaterial, Context, CpuMaterial, CpuMesh, CpuTexture, degrees, DepthTexture2D, DirectionalLight, FirstPersonControl, Gm, HasContext, HeadlessContext, Interpolation, LightingModel, Mat4, Mesh, OrbitControl, PhysicalMaterial, Positions, radians, RenderTarget, Srgba, SurfaceSettings, Terrain, Texture2D, TextureData, vec3, Vec3, Viewport, WindowedContext, Wrapping};
+use three_d::{AmbientLight, Camera, CameraControl, ClearState, ColorMaterial, Context, CpuMaterial, CpuMesh, CpuTexture, degrees, DepthTexture2D, DirectionalLight, Event, FirstPersonControl, Gm, HasContext, HeadlessContext, Interpolation, LightingModel, Mat4, Mesh, OrbitControl, PhysicalMaterial, Positions, radians, RenderTarget, Srgba, SurfaceSettings, Terrain, Texture2D, TextureData, vec3, Vec3, Viewport, WindowedContext, Wrapping};
 
 
 use crate::erosion::world::{Vec2, World};
@@ -41,7 +41,8 @@ enum Message {
     CycleInput,
     ErodeButton,
     FullPreview,
-    InitThreeD,
+    TurnViewRight,
+    TurnViewLeft
 }
 
 fn hydro_preview_do(topo_settings: &TopoSettings) {
@@ -765,6 +766,9 @@ fn main() {
     win.show();
     gl_widget.show();
 
+    ui.turn_right_vis.set_image(Some(SharedImage::load("png/75.png").unwrap()));
+    ui.turn_left_vis.set_image(Some(SharedImage::load("png/76.png").unwrap()));
+
     /////////////
 
     let viewport = Viewport {
@@ -782,17 +786,16 @@ fn main() {
     // and this is three_d context
     let context = Context::from_gl_context(Arc::new(gl)).unwrap();
 
-    let mut camera = Camera::new_perspective(
-        viewport,
-        vec3(256.0, 512.0, 512.0),
-        vec3(0.0, 0.0, 0.0),
-        vec3(0.0, 1.0, 0.0),
-        degrees(45.0),
-        0.1,
-        5000.0,
+    let mut camera = Camera::new_orthographic(viewport,
+                                              Vec3::new(0.0, 768.0, 0.0),
+                                              Vec3::new(512.0, 256.0, 512.0),
+                                              Vec3::new(0.0, 1.0, 0.0),
+                                              768.0,
+                                              0.1,
+                                              10000.0
     );
 
-    let mut control = FirstPersonControl::new(0.01);
+    let mut control = OrbitControl::new(Vec3::new(255.0, 64.0, 255.0), 512.0, 512.0);
 
     let terrain_material = PhysicalMaterial::new_opaque(&context, &CpuMaterial::default());
 
@@ -807,7 +810,7 @@ fn main() {
         terrain_material,
         Arc::new(
             move |x, y| {
-                *heightmap_opt.get_pixel((x) as u32, (y) as u32).channels().first().unwrap() as f32 * 0.01
+                *heightmap_opt.get_pixel((x) as u32, (y) as u32).channels().first().unwrap() as f32 * 0.02
             }
         ),
         512.0,
@@ -841,7 +844,13 @@ fn main() {
 
     ui.generate_hydro_prev.emit(s, Message::FullPreview);
 
-    ui.generate_weather_button.emit(s, Message::InitThreeD);
+    ui.turn_right_vis.emit(s, Message::TurnViewRight);
+
+    ui.turn_left_vis.emit(s, Message::TurnViewLeft);
+
+    let target = camera.target().clone();
+
+    let camera_y = camera.position().y.clone();
 
     while app.wait() {
         if let Some(msg) = r.recv() {
@@ -916,10 +925,16 @@ fn main() {
                     update_hydro_prev(&mut ui.hydro_preview, true);
                     update_hydro_prev(&mut ui.hydro_mask_preview, false);
                 }
-                Message::InitThreeD => {
-                    // three_d context is glow context so it's not necessary to import glow twice
+                Message::TurnViewRight => {
+                    camera.rotate_around_with_fixed_up(&target, -300.0, 0.0);
+                    let camera_act_pos = Vec3::new(camera.position().x, camera_y, camera.position().z);
+                    camera.set_view(camera_act_pos, target, Vec3::new(0.0, 1.0, 0.0));
+                    println!("pos: {:?}, target: {:?}, up: {:?}", camera.position(), camera.target(), camera.up());
+                }
+                Message::TurnViewLeft => {
 
-    }
+                }
+
             }
         }
         {
@@ -933,7 +948,7 @@ fn main() {
                 // Render the triangle with the per vertex colors defined at construction
                 .render(&camera, &terrain, &[&ambient, &directional]);
             frame += 1;
-            app::sleep(0.10);
+            // app::sleep(0.10);
             gl_widget.redraw();
         }
     }

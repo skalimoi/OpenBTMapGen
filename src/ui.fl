@@ -338,7 +338,7 @@ class UserInterface {open
       Fl_Button turn_right_vis {
         xywh {503 107 35 35}
       }
-      Fl_Button turn_left_vis {
+      Fl_Button turn_left_vis {selected
         xywh {503 153 35 35}
       }
     }
