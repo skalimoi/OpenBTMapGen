@@ -17,6 +17,7 @@ dependencies = [
  "rand 0.8.5",
  "rand_chacha 0.3.1",
  "three-d",
+ "three-d-asset",
  "tokio",
 ]
 
@@ -2180,6 +2181,7 @@ checksum = "e9959d4427b63958661828008f7470d6a8d2c0945b3df0dc7377d6aca38fb694"
 dependencies = [
  "cgmath",
  "half",
+ "image 0.24.7",
  "thiserror",
  "web-sys",
 ]

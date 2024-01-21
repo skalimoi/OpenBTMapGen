@@ -19,6 +19,7 @@ noise = {version = "0.8.2", features = ["images"]}
 rand = "0.8.5"
 rand_chacha = "0.3.1"
 three-d = { version = "0.16.3", features=["headless"] }
+three-d-asset = { version = "0.6.0", features = ["png"] }
 tokio = { version = "1.0.0", features = ["rt", "rt-multi-thread", "macros"] }
 
 [build-dependencies]

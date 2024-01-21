@@ -12,7 +12,7 @@ use rand::{thread_rng, Rng};
 use std::path::Path;
 use std::sync::Arc;
 use fltk::window::{GlContext, GlutWindow, GlWindow};
-use three_d::{AmbientLight, Camera, CameraControl, ClearState, ColorMaterial, Context, CpuMaterial, CpuMesh, CpuTexture, degrees, DepthTexture2D, DirectionalLight, Event, FirstPersonControl, Gm, HasContext, HeadlessContext, Interpolation, LightingModel, Mat4, Mesh, OrbitControl, PhysicalMaterial, Positions, radians, RenderTarget, Srgba, SurfaceSettings, Terrain, Texture2D, TextureData, vec3, Vec3, Viewport, WindowedContext, Wrapping};
+use three_d::{AmbientLight, Camera, CameraControl, ClearState, ColorMaterial, Context, CpuMaterial, CpuMesh, CpuTexture, degrees, DepthTexture2D, DirectionalLight, Event, FirstPersonControl, Geometry, Gm, HasContext, HeadlessContext, Interpolation, LightingModel, Mat4, Mesh, OrbitControl, PhysicalMaterial, Positions, radians, RenderStates, RenderTarget, Srgba, SurfaceSettings, Terrain, Texture2D, Texture2DRef, TextureData, vec3, Vec3, Viewport, WindowedContext, Wrapping};
 
 
 use crate::erosion::world::{Vec2, World};
@@ -22,6 +22,7 @@ mod erosion;
 mod topo_settings;
 mod ui;
 mod utils;
+mod weather;
 
 const DIMENSIONS: usize = 512;
 const PREV_DIMENSIONS: usize = 512;
@@ -787,36 +788,93 @@ fn main() {
     let context = Context::from_gl_context(Arc::new(gl)).unwrap();
 
     let mut camera = Camera::new_orthographic(viewport,
-                                              Vec3::new(0.0, 768.0, 0.0),
-                                              Vec3::new(512.0, 256.0, 512.0),
+                                              Vec3::new(0.0, 256.0, 0.0),
+                                              Vec3::new(255.0, 128.0, 255.0),
                                               Vec3::new(0.0, 1.0, 0.0),
                                               768.0,
                                               0.1,
                                               10000.0
     );
 
-    let mut control = OrbitControl::new(Vec3::new(255.0, 64.0, 255.0), 512.0, 512.0);
+    let m: CpuTexture = three_d_asset::io::load(&["example_images/eroded_cache.png"]).unwrap().deserialize("").unwrap();
 
-    let terrain_material = PhysicalMaterial::new_opaque(&context, &CpuMaterial::default());
+    let cpu_mat = three_d::CpuMaterial {
+        name: "".to_string(),
+        albedo: Default::default(),
+        albedo_texture: None,
+        metallic: 0.0,
+        roughness: 0.0,
+        occlusion_metallic_roughness_texture: None,
+        metallic_roughness_texture: None,
+        occlusion_strength: 0.0,
+        occlusion_texture: None,
+        normal_scale: 0.0,
+        normal_texture: None,
+        emissive: Default::default(),
+        emissive_texture: Some(m),
+        alpha_cutout: None,
+        lighting_model: LightingModel::Phong,
+        index_of_refraction: 0.0,
+        transmission: 0.0,
+        transmission_texture: None,
+    };
+
+
+
+    let terrain_material = PhysicalMaterial::new_opaque(&context, &cpu_mat);
 
     let heightmap_opt_dyn = image_crate::open("example_images/raw.png").unwrap();
 
     let heightmap_opt = heightmap_opt_dyn.to_luma16();
 
-    let ambient = AmbientLight::new(&context, 0.1, Srgba::WHITE);
+    let ambient = AmbientLight::new(&context, 0.4, Srgba::WHITE);
     let directional = DirectionalLight::new(&context, 0.4, Srgba::WHITE, &Vec3::new(0.0, -1.0, 100.0));
     let terrain = Terrain::new(
         &context,
         terrain_material,
         Arc::new(
             move |x, y| {
-                *heightmap_opt.get_pixel((x) as u32, (y) as u32).channels().first().unwrap() as f32 * 0.02
+                *heightmap_opt.get_pixel(x as u32, y as u32).channels().first().unwrap() as f32 * 0.01
             }
         ),
         512.0,
         1.0,
         three_d::prelude::Vec2::new(255.0, 255.0)
     );
+
+    let mut mesh_v: Vec<Gm<Mesh, PhysicalMaterial>> = vec![];
+
+    //// RANDOMIZER ////
+
+    let mut rng = thread_rng();
+
+    ////           ////
+
+
+    for x in 0..16 {
+        for y in 6..12 {
+            for z in 0..16 {
+                let color: (u8, u8, u8) = (rng.gen_range(0..256) as u8, rng.gen_range(0..256) as u8, rng.gen_range(0..256) as u8);
+                let mut cube = Gm::new(
+                    Mesh::new(&context, &CpuMesh::cube()),
+                    PhysicalMaterial::new_transparent(
+                        &context,
+                        &CpuMaterial {
+                            albedo: Srgba {
+                                r: color.0,
+                                g: color.1,
+                                b: color.2,
+                                a: 10,
+                            },
+                            ..Default::default()
+                        },
+                    ),
+                );
+                cube.set_transformation(Mat4::from_translation(Vec3::new(32.0 * x as f32, (32.0 * y as f32), 32.0 * z as f32)) * Mat4::from_scale(32.0));
+                mesh_v.push(cube);
+            }
+        }
+    }
 
     let mut frame = 0;
 
@@ -926,12 +984,15 @@ fn main() {
                     update_hydro_prev(&mut ui.hydro_mask_preview, false);
                 }
                 Message::TurnViewRight => {
+                    camera.rotate_around_with_fixed_up(&target, 300.0, 0.0);
+                    let camera_act_pos = Vec3::new(camera.position().x, camera_y, camera.position().z);
+                    camera.set_view(camera_act_pos, target, Vec3::new(0.0, 1.0, 0.0));
+                    // println!("pos: {:?}, target: {:?}, up: {:?}", camera.position(), camera.target(), camera.up());
+                }
+                Message::TurnViewLeft => {
                     camera.rotate_around_with_fixed_up(&target, -300.0, 0.0);
                     let camera_act_pos = Vec3::new(camera.position().x, camera_y, camera.position().z);
                     camera.set_view(camera_act_pos, target, Vec3::new(0.0, 1.0, 0.0));
-                    println!("pos: {:?}, target: {:?}, up: {:?}", camera.position(), camera.target(), camera.up());
-                }
-                Message::TurnViewLeft => {
 
                 }
 
@@ -940,13 +1001,15 @@ fn main() {
         {
             gl_widget.make_current();
             context.set_viewport(viewport);
-            camera.set_default_tone_and_color_mapping();
             let rt = RenderTarget::screen(&context, viewport.width, viewport.height);
             rt
                 // Clear color and depth of the render target
                 .clear(ClearState::color_and_depth(0.8, 0.8, 0.8, 1.0, 1.0))
                 // Render the triangle with the per vertex colors defined at construction
-                .render(&camera, &terrain, &[&ambient, &directional]);
+                .render(&camera, &terrain, &[&directional, &ambient]);
+            for element in mesh_v.iter() {
+                rt.render(&camera, element, &[&directional, &ambient]);
+            }
             frame += 1;
             // app::sleep(0.10);
             gl_widget.redraw();
