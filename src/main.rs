@@ -13,16 +13,20 @@ use std::path::Path;
 use std::sync::Arc;
 use fltk::window::{GlContext, GlutWindow, GlWindow};
 use three_d::{AmbientLight, Camera, CameraControl, ClearState, ColorMaterial, Context, CpuMaterial, CpuMesh, CpuTexture, degrees, DepthTexture2D, DirectionalLight, Event, FirstPersonControl, Geometry, Gm, HasContext, HeadlessContext, Interpolation, LightingModel, Mat4, Mesh, OrbitControl, PhysicalMaterial, Positions, radians, RenderStates, RenderTarget, Srgba, SurfaceSettings, Terrain, Texture2D, Texture2DRef, TextureData, vec3, Vec3, Viewport, WindowedContext, Wrapping};
-
+use std::default::Default;
 
 use crate::erosion::world::{Vec2, World};
 use topo_settings::NoiseTypesUi;
+use crate::utils::get_height;
+use crate::weather::{Climate, GridComponent, HumidDry, koppen_afam, koppen_as, koppen_aw, koppen_bsh, koppen_bsk, koppen_bwh, koppen_bwk, koppen_cfa, koppen_cfb, koppen_cfc, koppen_cwa, koppen_cwb, koppen_cwc, koppen_dfa, koppen_dfb, koppen_dfc, koppen_dsc, koppen_et};
+use crate::weather_settings::WeatherSettings;
 
 mod erosion;
 mod topo_settings;
 mod ui;
 mod utils;
 mod weather;
+mod weather_settings;
 
 const DIMENSIONS: usize = 512;
 const PREV_DIMENSIONS: usize = 512;
@@ -43,7 +47,13 @@ enum Message {
     ErodeButton,
     FullPreview,
     TurnViewRight,
-    TurnViewLeft
+    TurnViewLeft,
+    GenWeather,
+    WeatherSeedInput,
+    WeatherClimInput,
+    WeatherLatInput,
+    WeatherGridSize,
+    WeatherRandomSeed
 }
 
 fn hydro_preview_do(topo_settings: &TopoSettings) {
@@ -326,7 +336,7 @@ fn erode_heightmap_full(w: &mut impl InputExt, topo_settings: &TopoSettings) {
 fn update_preview_ero(w: &mut impl WidgetExt) {
     apply_color_eroded();
     w.set_image_scaled(None::<SharedImage>);
-    let img = SharedImage::load("example_images/eroded_cache.png").unwrap();
+    let img = SharedImage::load("example_images/eroded_cache_prev.png").unwrap();
     w.set_image_scaled(Some(img));
     w.redraw();
 }
@@ -429,7 +439,7 @@ fn apply_color_eroded() {
         .set_light_intensity(Default::default());
     r.disable_light();
     let b = r.render(&map);
-    utils::write_to_file(&b, "eroded_cache.png");
+    utils::write_to_file(&b, "eroded_cache_prev.png");
 }
 
 fn update_text_buffer(w: &mut impl InputExt, cycle: i32) {
@@ -556,6 +566,50 @@ fn update_billow_noise(settings: &TopoSettings, dimensions: usize) {
     utils::write_to_file(&renderer, "cache.png");
 }
 
+fn weather_seed_do(w: &mut impl InputExt, weather_settings: &mut WeatherSettings) {
+    if w.changed() {
+        weather_settings.set_seed(w.value().parse().unwrap());
+    }
+}
+
+fn weather_lat_do(w: &mut impl InputExt, weather_settings: &mut WeatherSettings) {
+    if w.changed() {
+        weather_settings.set_latitude(w.value().parse().unwrap());
+    }
+}
+
+fn weather_grid_size_do(w: &mut impl InputExt, weather_settings: &mut WeatherSettings) {
+    if w.changed() {
+        weather_settings.set_grid_size(w.value().parse().unwrap());
+    }
+}
+
+fn weather_climate_do(w: &mut impl MenuExt, weather_settings: &mut WeatherSettings, climates: &[Climate; 18]) {
+    if w.changed() {
+        let choice_name = w.choice().unwrap();
+        let mut climate_choice: Climate = Climate {
+            name: "Blank".to_string(),
+            general_type: 'x',
+            second_type: 'x',
+            third_type: 'x',
+            spring: Default::default(),
+            winter: (HumidDry::Humid, Default::default()),
+            fall: Default::default(),
+            summer: (HumidDry::Humid, Default::default()),
+            diurnal_range: Default::default(),
+        };
+        for climate in climates {
+            if choice_name.as_str() == climate.name.as_str() {
+                climate_choice = climate.clone();
+                break
+            } else {
+                continue
+            }
+        }
+        weather_settings.set_climate(climate_choice);
+    }
+}
+
 fn seed_input_do(w: &mut impl InputExt, topo_settings: &mut TopoSettings) {
     if w.changed() {
         topo_settings.set_seed(Some(w.value().parse().unwrap()));
@@ -573,6 +627,17 @@ fn seed_input_do(w: &mut impl InputExt, topo_settings: &mut TopoSettings) {
             _ => {}
         };
     }
+}
+
+fn weather_seed_random_do(
+    _w: &mut impl ButtonExt,
+    seed_box: &mut impl InputExt,
+    weather_settings: &mut WeatherSettings,
+) {
+    let mut rng = thread_rng();
+    let seed: u32 = rng.gen_range(u32::MIN..u32::MAX);
+    seed_box.set_value(&format!("{}", seed));
+    weather_settings.set_seed(seed);
 }
 
 fn seed_random_do(
@@ -738,6 +803,10 @@ fn cycle_input_do(w: &mut impl ValuatorExt, topo_settings: &mut TopoSettings) {
 fn main() {
     //TODO check for adequate default values since results are not optimal
 
+    let climates: [Climate; 18] = [koppen_cfa(), koppen_cfb(), koppen_cfc(), koppen_dfb(), koppen_dfc(), koppen_dfa(), koppen_cwc(), koppen_cwb(), koppen_cwa(), koppen_et(), koppen_afam(), koppen_as(), koppen_aw(), koppen_dsc(), koppen_bsh(), koppen_bsk(), koppen_bwh(), koppen_bwk()];
+
+    let mut grid: Vec<GridComponent> = vec![];
+
     let mut topo_settings: TopoSettings = TopoSettings {
         seed: Some(42949),
         noise_type: Some(NoiseTypesUi::BillowPerlin),
@@ -749,6 +818,13 @@ fn main() {
         min_height: -50,
         max_height: 1000,
         erosion_cycles: 0,
+    };
+
+    let mut weather_settings: WeatherSettings = WeatherSettings {
+        seed: None,
+        koppen: None,
+        latitude: 0,
+        grid_size: 16,
     };
 
     let (s, r) = app::channel::<Message>();
@@ -801,7 +877,7 @@ fn main() {
     let cpu_mat = three_d::CpuMaterial {
         name: "".to_string(),
         albedo: Default::default(),
-        albedo_texture: None,
+        albedo_texture: Some(m),
         metallic: 0.0,
         roughness: 0.0,
         occlusion_metallic_roughness_texture: None,
@@ -811,15 +887,13 @@ fn main() {
         normal_scale: 0.0,
         normal_texture: None,
         emissive: Default::default(),
-        emissive_texture: Some(m),
+        emissive_texture: Default::default(),
         alpha_cutout: None,
         lighting_model: LightingModel::Phong,
         index_of_refraction: 0.0,
         transmission: 0.0,
         transmission_texture: None,
     };
-
-
 
     let terrain_material = PhysicalMaterial::new_opaque(&context, &cpu_mat);
 
@@ -851,9 +925,9 @@ fn main() {
     ////           ////
 
 
-    for x in 0..16 {
-        for y in 6..12 {
-            for z in 0..16 {
+    for x in 0..weather_settings.grid_size {
+        for y in 0..6 {
+            for z in 0..weather_settings.grid_size {
                 let color: (u8, u8, u8) = (rng.gen_range(0..256) as u8, rng.gen_range(0..256) as u8, rng.gen_range(0..256) as u8);
                 let mut cube = Gm::new(
                     Mesh::new(&context, &CpuMesh::cube()),
@@ -870,7 +944,7 @@ fn main() {
                         },
                     ),
                 );
-                cube.set_transformation(Mat4::from_translation(Vec3::new(32.0 * x as f32, (32.0 * y as f32), 32.0 * z as f32)) * Mat4::from_scale(32.0));
+                cube.set_transformation(Mat4::from_translation(Vec3::new(32.0 * x as f32, (32.0 * (y + 6) as f32), 32.0 * z as f32)) * Mat4::from_scale(32.0));
                 mesh_v.push(cube);
             }
         }
@@ -879,6 +953,10 @@ fn main() {
     let mut frame = 0;
 
     /////////////
+
+    for climate in &climates {
+        ui.weather_type.add_choice(climate.name.as_str());
+    }
 
     ui.seed_random_button.emit(s, Message::SeedRandom);
 
@@ -905,6 +983,16 @@ fn main() {
     ui.turn_right_vis.emit(s, Message::TurnViewRight);
 
     ui.turn_left_vis.emit(s, Message::TurnViewLeft);
+
+    ui.weather_seed_input.emit(s, Message::WeatherSeedInput);
+
+    ui.weather_noise_random_seed.emit(s, Message::WeatherRandomSeed);
+
+    ui.weather_type.emit(s, Message::WeatherClimInput);
+
+    ui.latitude_input.emit(s, Message::WeatherLatInput);
+
+    ui.grid_size_input.emit(s, Message::WeatherGridSize);
 
     let target = camera.target().clone();
 
@@ -995,6 +1083,44 @@ fn main() {
                     camera.set_view(camera_act_pos, target, Vec3::new(0.0, 1.0, 0.0));
 
                 }
+                Message::WeatherSeedInput => {
+                    weather_seed_do(&mut ui.weather_seed_input, &mut weather_settings);
+                }
+                Message::WeatherLatInput => {
+                    weather_lat_do(&mut ui.latitude_input, &mut weather_settings);
+                }
+                Message::WeatherGridSize => {
+                    weather_grid_size_do(&mut ui.grid_size_input, &mut weather_settings);
+                }
+                Message::WeatherClimInput => {
+                    weather_climate_do(&mut ui.weather_type, &mut weather_settings, &climates);
+                }
+                Message::WeatherRandomSeed => {
+                    weather_seed_random_do(&mut ui.weather_noise_random_seed, &mut ui.weather_seed_input, &mut weather_settings);
+                }
+                Message::GenWeather => {
+                    let map = image_crate::open("example_images/eroded_cache.png").unwrap().into_luma16();
+                    let component_size = 512.0 / weather_settings.grid_size as f64;
+                    for x in 0..weather_settings.grid_size {
+                        for y in 0..6 {
+                            for z in 0..weather_settings.grid_size {
+                                let h = match y.clone() { 
+                                    0 => get_height(&map, topo_settings.max_height as f64, ((component_size * x as f64) as u32, (component_size * y as f64) as u32)),
+                                    _ => 4000 * y,
+                                };
+                                let component = GridComponent {
+                                    index: Default::default(),
+                                    mean_altitude: 0.0,
+                                    temperature: 0.0,
+                                    wind_p: Default::default(),
+                                    pressure: 0.0,
+                                    humidity: 0.0,
+                                    td: 0.0,
+                                };
+                            }
+                        }
+                    }
+                }
 
             }
         }
@@ -1007,9 +1133,14 @@ fn main() {
                 .clear(ClearState::color_and_depth(0.8, 0.8, 0.8, 1.0, 1.0))
                 // Render the triangle with the per vertex colors defined at construction
                 .render(&camera, &terrain, &[&directional, &ambient]);
-            for element in mesh_v.iter() {
-                rt.render(&camera, element, &[&directional, &ambient]);
+            for x in 0..16 {
+                for y in 0..6 {
+                    for z in 0..16 {
+                        rt.render(&camera, &mesh_v[x + 16 *(y + 6 * z)], &[&directional, &ambient]);
+                    }
+                }
             }
+
             frame += 1;
             // app::sleep(0.10);
             gl_widget.redraw();
