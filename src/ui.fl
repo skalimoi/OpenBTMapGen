@@ -65,11 +65,7 @@ class UserInterface {open
         } {
           Fl_Group first_group {open
             xywh {0 60 760 520} box BORDER_BOX
-          } {
-            Fl_Output console_output_ero {
-              xywh {260 81 310 485} resizable
-            }
-          }
+          } {}
           Fl_Group topo_menu_box {open
             xywh {585 55 285 525} box FLAT_BOX align 192
           } {
@@ -193,7 +189,7 @@ class UserInterface {open
           label Weather open
           xywh {0 60 870 520}
         } {
-          Fl_Group {} {open
+          Fl_Group {} {open selected
             xywh {0 60 870 520} box BORDER_BOX
           } {
             Fl_Group weather_preview {
@@ -217,16 +213,12 @@ class UserInterface {open
                 xywh {775 60 64 25} box GTK_UP_BOX down_box GTK_DOWN_BOX
               }
               Fl_Group {} {open
-                xywh {570 100 265 105} box BORDER_FRAME color 37
+                xywh {570 100 265 74} box BORDER_FRAME color 37
               } {
                 Fl_Choice weather_noise_choice {
                   label {Noise type:} open
                   xywh {694 125 95 25} down_box BORDER_BOX
                 } {}
-                Fl_Input weather_noise_octaves_input {
-                  label {Octaves:}
-                  xywh {695 160 95 25}
-                }
               }
               Fl_Box {} {
                 label {Noise settings}
@@ -326,7 +318,35 @@ class UserInterface {open
               }
             }
             Fl_Box weather_viewer_toolbox {
-              xywh {498 99 45 445} box BORDER_FRAME color 38
+              xywh {498 137 45 361} box BORDER_FRAME color 38
+            }
+            Fl_Button turn_right_vis {
+              xywh {503 144 35 35}
+            }
+            Fl_Button turn_left_vis {
+              xywh {503 190 35 35}
+            }
+            Fl_Button turn_up_vis {
+              xywh {503 234 35 35}
+            }
+            Fl_Button turn_down_vis {
+              xywh {503 278 35 35}
+            }
+            Fl_Button temperature_mode {
+              xywh {503 321 35 35}
+            }
+            Fl_Button humidity_mode {
+              xywh {503 366 35 35}
+            }
+            Fl_Button pressure_mode {
+              xywh {503 411 35 35}
+            }
+            Fl_Button wind_mode {
+              xywh {503 456 35 35}
+            }
+            Fl_Value_Slider day_vis_slider {
+              label {Day visualization:}
+              xywh {570 197 265 21} type Horizontal align 1 minimum 1 maximum 360 step 1 textsize 14
             }
           }
         }
@@ -334,12 +354,6 @@ class UserInterface {open
           label Misc open
           xywh {0 60 870 520} hide
         } {}
-      }
-      Fl_Button turn_right_vis {
-        xywh {503 107 35 35}
-      }
-      Fl_Button turn_left_vis {selected
-        xywh {503 153 35 35}
       }
     }
     comment {En el preview pane un panel de zoom, otro abajo con x e y y cosas como value} {in_source in_header

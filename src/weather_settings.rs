@@ -1,7 +1,7 @@
-use crate::topo_settings::NoiseTypesUi;
+
 use crate::weather::Climate;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct WeatherSettings {
     pub seed: Option<u32>,
     pub koppen: Option<Climate>,

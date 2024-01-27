@@ -2,13 +2,14 @@ use std::f32::consts::E;
 use std::fs::File;
 use std::io::Write;
 use nalgebra::Vector3;
-use noise::{Fbm, NoiseFn, Perlin, Simplex};
+use noise::{Fbm, NoiseFn, Perlin};
 use rand::{Rng, thread_rng};
 use ron::ser::PrettyConfig;
 use serde::{Deserialize, Serialize};
 use std::ops::Range;
 use std::string::ToString;
-use flo_curves::bezier;
+
+use ordered_float::OrderedFloat;
 use crate::weather::HumidDry::{Dry, Humid};
 
 const COLD_SPRING: Range<f32> = 0.0..15.0;
@@ -35,7 +36,7 @@ pub const EQUATOR_TEMP_RANGE: Range<f32> = 0.0..3.0;
 pub const TEMPERATE_TEMP_RANGE: Range<f32> = 7.0..10.0;
 pub const CONTINENTAL_POLAR_TEMP_RANGE: Range<f32> = 12.0..25.0;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum HumidDry {
     Humid,
     Dry,
@@ -60,7 +61,7 @@ pub struct GridComponent {
 
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Climate {
     pub name: String,
     pub general_type: char,
@@ -394,10 +395,10 @@ pub fn koppen_dsc() -> Climate {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct GenData {
     pub index: (i32, i32, i32),
-    pub temperature: Vec<f64>,
+    pub temperature: Vec<OrderedFloat<f64>>,
     pub altitude: f64,
-    pub pressure: Vec<f64>,
-    pub humidity: Vec<f64>,
+    pub pressure: Vec<OrderedFloat<f64>>,
+    pub humidity: Vec<OrderedFloat<f64>>,
     pub wind: Vec<(f32, f32, f32)>,
     pub td: Vec<f64>,
 }
@@ -432,7 +433,6 @@ impl GenData {
     pub fn calculate_rel_hum(
         temperature: f32,
         factor: f32,
-        tdprev: f32
     ) -> (f32, f32) {
         let mut td: f32 = 0.0;
 
@@ -497,17 +497,16 @@ impl GenData {
 
 
     pub fn gen_year_data(
-        component: &mut GridComponent,
         latitude: i32,
         altitude: f64,
         index: (i32, i32, i32),
         noise: Fbm<Perlin>,
         climate: Climate
     ) -> GenData {
-        let mut temperature_vec: Vec<f64> = vec![];
-        let mut pressure_vec: Vec<f64> = vec![];
+        let mut temperature_vec: Vec<OrderedFloat<f64>> = vec![];
+        let mut pressure_vec: Vec<OrderedFloat<f64>> = vec![];
         let mut wind_vec: Vec<(f32, f32, f32)> = vec![];
-        let mut hum_vec: Vec<f64> = vec![];
+        let mut hum_vec: Vec<OrderedFloat<f64>> = vec![];
         let mut td_vec: Vec<f64> = vec![];
         let mut current_season = Season::Winter;
 
@@ -567,7 +566,7 @@ impl GenData {
             for hour in 1..=24 {
                 let factor = curve.point_at_pos(0.042 * hour as f64).1; // 0.042 -> 1h
                 let temp = (day_temp * factor) + (night_temp * (1.0 - factor));
-                temperature_vec.push(temp);
+                temperature_vec.push(OrderedFloat(temp));
             }
 
             // ---- PRESSURE ---- //
@@ -575,8 +574,8 @@ impl GenData {
             for hour in 1..=24 {
                 let index = hour * day;
                 let temp_value = temperature_vec.get(index - 1).unwrap();
-                let pres = Self::calculate_pressure(altitude as f32, *temp_value as f32, 1013.25);
-                pressure_vec.push(pres as f64);
+                let pres = Self::calculate_pressure(altitude as f32, temp_value.0 as f32, 1013.25);
+                pressure_vec.push(OrderedFloat(pres as f64));
             }
 
             // ---- WIND ---- //
@@ -598,11 +597,10 @@ impl GenData {
             for hour in 1..=24 {
                 // let water = altitude <= -0.6;
                 let rel = Self::calculate_rel_hum(
-                    *temperature_vec.get((hour * day) - 1).unwrap() as f32,
+                    temperature_vec.get((hour * day) - 1).unwrap().0 as f32,
                     seasonal_factor,
-                    component.td
                 );
-                hum_vec.push(rel.0 as f64);
+                hum_vec.push(OrderedFloat(rel.0 as f64));
                 td_vec.push(rel.1 as f64);
             }
         }
@@ -625,7 +623,7 @@ impl GenData {
 }
 
 impl GridComponent {
-    pub fn generate_data(&mut self, latitude: i32, climate: &str) -> GenData {
+    pub fn generate_data(&mut self, latitude: i32, climate: &str, _td: f32) -> GenData {
         let mut fetched: Climate = koppen_et();
         let climates: [Climate; 18] = [koppen_cfa(), koppen_cfb(), koppen_cfc(), koppen_dfb(), koppen_dfc(), koppen_dfa(), koppen_cwc(), koppen_cwb(), koppen_cwa(), koppen_et(), koppen_afam(), koppen_as(), koppen_aw(), koppen_dsc(), koppen_bsh(), koppen_bsk(), koppen_bwh(), koppen_bwk()];
         for climate_iter in climates {
@@ -641,7 +639,7 @@ impl GridComponent {
             }
         }
         let noise: Fbm<Perlin> = Fbm::new(345435);
-        let gen_data = GenData::gen_year_data(self, latitude, self.mean_altitude as f64, (self.index.x, self.index.y, self.index.z), noise, fetched);
+        let gen_data = GenData::gen_year_data(latitude, self.mean_altitude as f64, (self.index.x, self.index.y, self.index.z), noise, fetched);
         gen_data
     }
     pub fn save_data(data: &GenData) {

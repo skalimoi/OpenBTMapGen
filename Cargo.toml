@@ -24,6 +24,8 @@ three-d-asset = { version = "0.6.0", features = ["png"] }
 tokio = { version = "1.0.0", features = ["rt", "rt-multi-thread", "macros"] }
 serde = { version = "1.0.195", features = ["derive"] }
 flo_curves = "0.7.2"
+colorgrad = "0.6.2"
+ordered-float = {version = "4.2.0", features = ["serde"] }
 
 [build-dependencies]
 fl2rust = "0.5.17"

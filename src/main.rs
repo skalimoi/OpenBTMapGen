@@ -2,24 +2,27 @@ use crate::topo_settings::{TopoSettings};
 use fltk::app::Sender;
 use image_crate::imageops::FilterType;
 use map_range::MapRange;
-use std::ops::Add;
 use fltk::image::SharedImage;
 use fltk::{prelude::*, *};
-use image_crate::{ImageBuffer, Luma, Pixel, DynamicImage, EncodableLayout};
+use image_crate::{ImageBuffer, Luma, Pixel, DynamicImage};
 use noise::utils::{ImageRenderer, NoiseMap, NoiseMapBuilder, PlaneMapBuilder};
 use noise::{Billow, Curve, Fbm, MultiFractal, Perlin, Seedable, Simplex};
 use rand::{thread_rng, Rng};
-use std::path::Path;
+
 use std::sync::Arc;
-use fltk::window::{GlContext, GlutWindow, GlWindow};
-use three_d::{AmbientLight, Camera, CameraControl, ClearState, ColorMaterial, Context, CpuMaterial, CpuMesh, CpuTexture, degrees, DepthTexture2D, DirectionalLight, Event, FirstPersonControl, Geometry, Gm, HasContext, HeadlessContext, Interpolation, LightingModel, Mat4, Mesh, OrbitControl, PhysicalMaterial, Positions, radians, RenderStates, RenderTarget, Srgba, SurfaceSettings, Terrain, Texture2D, Texture2DRef, TextureData, vec3, Vec3, Viewport, WindowedContext, Wrapping};
+use fltk::window::{GlutWindow};
+use three_d::{AmbientLight, Camera, ClearState, ColorMaterial, Context, CpuMaterial, CpuMesh, CpuTexture, DirectionalLight, FromCpuMaterial, Gm, LightingModel, Mat4, Mesh, PhysicalMaterial, RenderTarget, Srgba, Terrain, Vec3, Viewport};
 use std::default::Default;
+
+use colorgrad::Color;
+
 
 use crate::erosion::world::{Vec2, World};
 use topo_settings::NoiseTypesUi;
 use crate::utils::get_height;
-use crate::weather::{Climate, GridComponent, HumidDry, koppen_afam, koppen_as, koppen_aw, koppen_bsh, koppen_bsk, koppen_bwh, koppen_bwk, koppen_cfa, koppen_cfb, koppen_cfc, koppen_cwa, koppen_cwb, koppen_cwc, koppen_dfa, koppen_dfb, koppen_dfc, koppen_dsc, koppen_et};
+use crate::weather::{Climate, GenData, HumidDry, koppen_afam, koppen_as, koppen_aw, koppen_bsh, koppen_bsk, koppen_bwh, koppen_bwk, koppen_cfa, koppen_cfb, koppen_cfc, koppen_cwa, koppen_cwb, koppen_cwc, koppen_dfa, koppen_dfb, koppen_dfc, koppen_dsc, koppen_et};
 use crate::weather_settings::WeatherSettings;
+use crate::WeatherVisualization::Init;
 
 mod erosion;
 mod topo_settings;
@@ -31,6 +34,14 @@ mod weather_settings;
 const DIMENSIONS: usize = 512;
 const PREV_DIMENSIONS: usize = 512;
 
+#[derive(Copy, Clone)]
+enum WeatherVisualization {
+    Wind,
+    Temperature,
+    Pressure,
+    Humidity,
+    Init
+}
 #[derive(Copy, Clone)]
 enum Message {
     PerlinChoice,
@@ -53,7 +64,91 @@ enum Message {
     WeatherClimInput,
     WeatherLatInput,
     WeatherGridSize,
-    WeatherRandomSeed
+    WeatherRandomSeed,
+    ViewTemperature,
+    ViewHumidity,
+    ViewPressure,
+    ViewWind,
+    DaySlider
+}
+
+struct ViewState {
+    mode: WeatherVisualization,
+    hour: u32
+}
+
+fn set_hour(w: &mut impl ValuatorExt, state: &mut ViewState) {
+    state.hour = w.value() as u32;
+}
+
+/// Outputs previous state for comparison
+fn set_view_state(options: &mut ViewState, state: WeatherVisualization) -> WeatherVisualization {
+    let previous_state = options.mode;
+    options.mode = state;
+    previous_state
+}
+fn update_grid_at_time(hour: u32, v_type: WeatherVisualization, grid_vector: &mut Vec<GenData>, cube_vector: &mut [Gm<Mesh, ColorMaterial>]) {
+    use ordered_float::OrderedFloat;
+
+    let temp_grad = colorgrad::CustomGradient::new().colors(&[
+        Color::from_rgba8(30, 92, 179, 255),
+        Color::from_rgba8(243, 240, 29, 255),
+        Color::from_rgba8(164, 38, 44, 255)
+    ]).build().unwrap();
+    let hum_grad = colorgrad::CustomGradient::new().colors(&[
+        Color::from_rgba8(230, 250, 194, 255),
+        Color::from_rgba8(205, 255, 205, 255),
+        Color::from_rgba8(153, 240, 178, 255),
+        Color::from_rgba8(83, 189, 159, 255),
+        Color::from_rgba8(50, 166, 150, 255),
+        Color::from_rgba8(50, 150, 180, 255),
+        Color::from_rgba8(5, 112, 176, 255),
+        Color::from_rgba8(5, 80, 140, 255),
+        Color::from_rgba8(10, 31, 150, 255),
+        Color::from_rgba8(44, 2, 70, 255),
+        Color::from_rgba8(106, 44, 90, 255)
+    ]).build().unwrap();
+    let pressure_grad = colorgrad::CustomGradient::new().colors(&[
+        Color::from_rgba8(21, 18, 88, 255),
+        Color::from_rgba8(92, 154, 146, 255),
+        Color::from_rgba8(219, 233, 231, 255)
+    ]).build().unwrap();
+
+    for component in grid_vector.as_slice() {
+        let (min_temp, max_temp) = (component.temperature.iter().min().unwrap(), component.temperature.iter().max().unwrap());
+        let (min_pres, max_pres) = (component.pressure.iter().min().unwrap(), component.pressure.iter().max().unwrap());
+        let (min_hum, max_hum) = (component.humidity.iter().min().unwrap(), component.humidity.iter().max().unwrap());
+        let cube = &mut cube_vector[component.index.0 as usize + 16 *(component.index.1 as usize + 6 * component.index.2 as usize)];
+        let range = match hour {
+            0 => 0..24,
+            _ => (((24 * hour) - 24) as usize)..((24 * hour) as usize)
+        };
+        println!("SELECTED RANGE!!!!!! : {:?}", range);
+        match v_type {
+            Init => {},
+            WeatherVisualization::Wind => {},
+            WeatherVisualization::Temperature => {
+                let median = (component.temperature[range.clone()].iter().sum::<OrderedFloat<f64>>().0 as isize) / range.clone().len() as isize;
+                let grad_position = (median as f64).map_range(min_temp.0..max_temp.0, 0.0..1.0);
+                println!("TEMP RANGE: {} -- {} -- {}", min_temp, max_temp, grad_position);
+                let color = temp_grad.at(grad_position).to_linear_rgba_u8();
+                cube.material.color = Srgba::new(color.0, color.1, color.2, 10);
+                println!("CHOSEN TEMP: {:?}", color);
+            },
+            WeatherVisualization::Pressure => {
+                let median = (component.pressure[range.clone()].iter().sum::<OrderedFloat<f64>>().0 as usize) / range.clone().len();
+                let grad_position = (median as f64).map_range(min_pres.0..max_pres.0, 0.0..1.0);
+                let color = pressure_grad.at(grad_position).to_linear_rgba_u8();
+                cube.material.color = Srgba::new(color.0, color.1, color.2, 10);
+            },
+            WeatherVisualization::Humidity => {
+                let median = (component.humidity[range.clone()].iter().sum::<OrderedFloat<f64>>().0 as usize) / range.clone().len();
+                let grad_position = (median as f64).map_range(min_hum.0..max_hum.0, 0.0..1.0);
+                let color = hum_grad.at(grad_position).to_linear_rgba_u8();
+                cube.material.color = Srgba::new(color.0, color.1, color.2, 10);
+            }
+        }
+    }
 }
 
 fn hydro_preview_do(topo_settings: &TopoSettings) {
@@ -64,7 +159,7 @@ fn hydro_preview_do(topo_settings: &TopoSettings) {
     }
 }
 
-fn erode_terrain_preview(w: &mut impl InputExt, topo_settings: &TopoSettings) {
+fn erode_terrain_preview(topo_settings: &TopoSettings) {
     let img = image_crate::io::Reader::open("example_images/raw.png")
         .unwrap()
         .decode()
@@ -82,7 +177,7 @@ fn erode_terrain_preview(w: &mut impl InputExt, topo_settings: &TopoSettings) {
     eprintln!("Eroding preview.");
     eprintln!(
         "Total cycle count: {}",
-        (topo_settings.erosion_cycles as i32)
+        topo_settings.erosion_cycles as i32
     );
 
     for cycle in 0..(topo_settings.erosion_cycles as i32) {
@@ -102,13 +197,13 @@ fn erode_terrain_preview(w: &mut impl InputExt, topo_settings: &TopoSettings) {
         .collect();
     let buffer: ImageBuffer<Luma<u16>, Vec<u16>> =
         ImageBuffer::from_raw(width, height, eroded_preview).unwrap();
-    buffer.save("example_images/eroded_cache.png");
+    buffer.save("example_images/eroded_cache.png").expect("Error saving eroded image.");
 }
 
-fn erode_heightmap_full(w: &mut impl InputExt, topo_settings: &TopoSettings) {
-    use std::fs;
+fn erode_heightmap_full(topo_settings: &TopoSettings) {
+    
 
-    let mut discharge_map = vec![0; (8192 * 8192)];
+    let mut discharge_map = vec![0; 8192 * 8192];
 
     let img = image_crate::io::Reader::open("example_images/raw.png")
         .unwrap()
@@ -131,7 +226,7 @@ fn erode_heightmap_full(w: &mut impl InputExt, topo_settings: &TopoSettings) {
     eprintln!("Size: 512");
     eprintln!(
         "Total cycle count: {}",
-        (topo_settings.erosion_cycles as i32)
+        topo_settings.erosion_cycles as i32
     );
 
     for cycle in 0..(topo_settings.erosion_cycles as i32) {
@@ -169,7 +264,7 @@ fn erode_heightmap_full(w: &mut impl InputExt, topo_settings: &TopoSettings) {
     eprintln!("Size: 1024");
     eprintln!(
         "Total cycle count: {}",
-        (topo_settings.erosion_cycles as i32)
+        topo_settings.erosion_cycles as i32
     );
     
     for cycle in 0..(topo_settings.erosion_cycles as i32) {
@@ -207,7 +302,7 @@ fn erode_heightmap_full(w: &mut impl InputExt, topo_settings: &TopoSettings) {
     eprintln!("Size: 2048");
     eprintln!(
         "Total cycle count: {}",
-        (topo_settings.erosion_cycles as i32)
+        topo_settings.erosion_cycles as i32
     );
     
     for cycle in 0..(topo_settings.erosion_cycles as i32) {
@@ -246,7 +341,7 @@ fn erode_heightmap_full(w: &mut impl InputExt, topo_settings: &TopoSettings) {
     eprintln!("Size: 4096");
     eprintln!(
         "Total cycle count: {}",
-        (topo_settings.erosion_cycles as i32)
+        topo_settings.erosion_cycles as i32
     );
     
     for cycle in 0..(topo_settings.erosion_cycles as i32) {
@@ -285,7 +380,7 @@ fn erode_heightmap_full(w: &mut impl InputExt, topo_settings: &TopoSettings) {
     eprintln!("Size: 8192");
     eprintln!(
         "Total cycle count: {}",
-        (topo_settings.erosion_cycles as i32)
+        topo_settings.erosion_cycles as i32
     );
     
     for cycle in 0..(topo_settings.erosion_cycles as i32) {
@@ -369,7 +464,7 @@ fn apply_variations_perlin(source: Fbm<Perlin>, mtn: f64, sea: f64) -> Curve<f64
         .add_control_point(-0.999, 0.0 - sealevel)
         .add_control_point(-1.0, 0.0 - sealevel);
 
-    return curved;
+    curved
 }
 
 fn apply_variations_simplex(
@@ -386,7 +481,7 @@ fn apply_variations_simplex(
         .add_control_point(-0.999, 0.0 - sealevel)
         .add_control_point(-1.0, 0.0 - sealevel);
 
-    return curved;
+    curved
 }
 
 fn apply_variations_billow(
@@ -403,11 +498,11 @@ fn apply_variations_billow(
         .add_control_point(-0.999, 0.0 - sealevel)
         .add_control_point(-1.0, 0.0 - sealevel);
 
-    return curved;
+    curved
 }
 
 fn apply_color_eroded() {
-    use std::fs;
+    
     let gradient = noise::utils::ColorGradient::new().build_terrain_gradient();
     let eroded_image = image_crate::open("example_images/eroded_cache.png")
         .unwrap()
@@ -442,14 +537,8 @@ fn apply_color_eroded() {
     utils::write_to_file(&b, "eroded_cache_prev.png");
 }
 
-fn update_text_buffer(w: &mut impl InputExt, cycle: i32) {
-    let mut prev = w.value();
-    let buf = prev.add(&*format!("..{}", cycle));
-    w.set_value(buf.as_str());
-}
-
 fn apply_color_hydro_full() {
-    use std::fs;
+    
     let gradient = noise::utils::ColorGradient::new().build_terrain_gradient();
     let eroded_image = image_crate::open("example_images/eroded_cache_full.png")
         .unwrap()
@@ -475,7 +564,7 @@ fn apply_color_hydro_full() {
 }
 
 fn update_perlin_noise(settings: &TopoSettings, dimensions: usize) {
-    use std::fs;
+    
     let mut perlin: Fbm<Perlin> = Default::default();
     perlin = perlin
         .set_seed(settings.seed.unwrap())
@@ -508,10 +597,10 @@ fn update_perlin_noise(settings: &TopoSettings, dimensions: usize) {
 }
 
 fn update_simplex_noise(settings: &TopoSettings, dimensions: usize) {
-    use std::fs;
+    
     let mut simplex: Fbm<Simplex> = Default::default();
     simplex = simplex
-        .set_seed(settings.seed.unwrap() as u32)
+        .set_seed(settings.seed.unwrap())
         .set_octaves(settings.noise_octaves.unwrap() as usize)
         .set_frequency(settings.noise_frequency.unwrap())
         .set_lacunarity(settings.noise_lacunarity.unwrap());
@@ -541,7 +630,7 @@ fn update_noise_img(w: &mut impl WidgetExt) {
 }
 
 fn update_billow_noise(settings: &TopoSettings, dimensions: usize) {
-    use std::fs;
+    
     let mut perlin: Billow<Perlin> = Default::default();
     perlin = perlin
         .set_seed(settings.seed.unwrap())
@@ -585,7 +674,7 @@ fn weather_grid_size_do(w: &mut impl InputExt, weather_settings: &mut WeatherSet
 }
 
 fn weather_climate_do(w: &mut impl MenuExt, weather_settings: &mut WeatherSettings, climates: &[Climate; 18]) {
-    if w.changed() {
+
         let choice_name = w.choice().unwrap();
         let mut climate_choice: Climate = Climate {
             name: "Blank".to_string(),
@@ -607,7 +696,7 @@ fn weather_climate_do(w: &mut impl MenuExt, weather_settings: &mut WeatherSettin
             }
         }
         weather_settings.set_climate(climate_choice);
-    }
+
 }
 
 fn seed_input_do(w: &mut impl InputExt, topo_settings: &mut TopoSettings) {
@@ -803,9 +892,14 @@ fn cycle_input_do(w: &mut impl ValuatorExt, topo_settings: &mut TopoSettings) {
 fn main() {
     //TODO check for adequate default values since results are not optimal
 
+    let mut view_state = ViewState {
+        mode: Init,
+        hour: 0
+    };
+
     let climates: [Climate; 18] = [koppen_cfa(), koppen_cfb(), koppen_cfc(), koppen_dfb(), koppen_dfc(), koppen_dfa(), koppen_cwc(), koppen_cwb(), koppen_cwa(), koppen_et(), koppen_afam(), koppen_as(), koppen_aw(), koppen_dsc(), koppen_bsh(), koppen_bsk(), koppen_bwh(), koppen_bwk()];
 
-    let mut grid: Vec<GridComponent> = vec![];
+    let mut grid: Vec<GenData> = vec![];
 
     let mut topo_settings: TopoSettings = TopoSettings {
         seed: Some(42949),
@@ -827,6 +921,25 @@ fn main() {
         grid_size: 16,
     };
 
+    // Initialize grid
+    for x in 0..weather_settings.grid_size {
+        for y in 0..6 {
+            for z in 0..weather_settings.grid_size {
+                let _h = 0;
+                let component = GenData {
+                    index: (x as i32, y, z as i32),
+                    temperature: vec![],
+                    altitude: 0.0,
+                    pressure: vec![],
+                    humidity: vec![],
+                    wind: vec![],
+                    td: vec![],
+                };
+                grid.push(component);
+            }
+        }
+    }
+
     let (s, r) = app::channel::<Message>();
 
     let app = app::App::default();
@@ -836,7 +949,7 @@ fn main() {
     // create gl window
     let mut gl_widget = GlutWindow::new(x, y, w, h, None);
     // let mut gl_win = GlutWindow::new(x, y, w, h, None);
-    gl_widget.set_mode(fltk::enums::Mode::Opengl3);
+    gl_widget.set_mode(enums::Mode::Opengl3);
     ui.weather_preview.add(&gl_widget);
     win.end();
     gl_widget.end();
@@ -872,9 +985,9 @@ fn main() {
                                               10000.0
     );
 
-    let m: CpuTexture = three_d_asset::io::load(&["example_images/eroded_cache.png"]).unwrap().deserialize("").unwrap();
+    let m: CpuTexture = CpuTexture::default();
 
-    let cpu_mat = three_d::CpuMaterial {
+    let cpu_mat = CpuMaterial {
         name: "".to_string(),
         albedo: Default::default(),
         albedo_texture: Some(m),
@@ -895,17 +1008,19 @@ fn main() {
         transmission_texture: None,
     };
 
+    // three_d_asset::io::load(&["example_images/eroded_cache.png"]).unwrap().deserialize("").unwrap();
+
     let terrain_material = PhysicalMaterial::new_opaque(&context, &cpu_mat);
 
-    let heightmap_opt_dyn = image_crate::open("example_images/raw.png").unwrap();
+    let heightmap_opt_dyn = DynamicImage::new_luma16(512, 512);
 
     let heightmap_opt = heightmap_opt_dyn.to_luma16();
 
     let ambient = AmbientLight::new(&context, 0.4, Srgba::WHITE);
     let directional = DirectionalLight::new(&context, 0.4, Srgba::WHITE, &Vec3::new(0.0, -1.0, 100.0));
-    let terrain = Terrain::new(
+    let mut terrain = Terrain::new(
         &context,
-        terrain_material,
+        terrain_material.clone(),
         Arc::new(
             move |x, y| {
                 *heightmap_opt.get_pixel(x as u32, y as u32).channels().first().unwrap() as f32 * 0.01
@@ -916,7 +1031,7 @@ fn main() {
         three_d::prelude::Vec2::new(255.0, 255.0)
     );
 
-    let mut mesh_v: Vec<Gm<Mesh, PhysicalMaterial>> = vec![];
+    let mut mesh_v: Vec<Gm<Mesh, ColorMaterial>> = vec![];
 
     //// RANDOMIZER ////
 
@@ -931,8 +1046,7 @@ fn main() {
                 let color: (u8, u8, u8) = (rng.gen_range(0..256) as u8, rng.gen_range(0..256) as u8, rng.gen_range(0..256) as u8);
                 let mut cube = Gm::new(
                     Mesh::new(&context, &CpuMesh::cube()),
-                    PhysicalMaterial::new_transparent(
-                        &context,
+                    ColorMaterial::from_cpu_material(&context,
                         &CpuMaterial {
                             albedo: Srgba {
                                 r: color.0,
@@ -942,9 +1056,9 @@ fn main() {
                             },
                             ..Default::default()
                         },
-                    ),
+                    )
                 );
-                cube.set_transformation(Mat4::from_translation(Vec3::new(32.0 * x as f32, (32.0 * (y + 6) as f32), 32.0 * z as f32)) * Mat4::from_scale(32.0));
+                cube.set_transformation(Mat4::from_translation(Vec3::new(32.0 * x as f32, 32.0 * (y + 6) as f32, 32.0 * z as f32)) * Mat4::from_scale(32.0));
                 mesh_v.push(cube);
             }
         }
@@ -957,6 +1071,16 @@ fn main() {
     for climate in &climates {
         ui.weather_type.add_choice(climate.name.as_str());
     }
+
+    ui.wind_mode.emit(s, Message::ViewWind);
+
+    ui.humidity_mode.emit(s, Message::ViewHumidity);
+
+    ui.temperature_mode.emit(s, Message::ViewTemperature);
+
+    ui.pressure_mode.emit(s, Message::ViewPressure);
+
+    ui.day_vis_slider.emit(s, Message::DaySlider);
 
     ui.seed_random_button.emit(s, Message::SeedRandom);
 
@@ -994,9 +1118,11 @@ fn main() {
 
     ui.grid_size_input.emit(s, Message::WeatherGridSize);
 
-    let target = camera.target().clone();
+    ui.generate_weather_button.emit(s, Message::GenWeather);
 
-    let camera_y = camera.position().y.clone();
+    let target = *camera.target();
+
+    let camera_y = camera.position().y;
 
     while app.wait() {
         if let Some(msg) = r.recv() {
@@ -1062,12 +1188,12 @@ fn main() {
                     cycle_input_do(&mut ui.erosion_cycles_input, &mut topo_settings)
                 }
                 Message::ErodeButton => {
-                    erode_terrain_preview(&mut ui.console_output_ero, &mut topo_settings);
+                    erode_terrain_preview(&mut topo_settings);
                     update_preview_ero(&mut ui.preview_erosion_topo);
                 }
                 Message::FullPreview => {
                     hydro_preview_do(&topo_settings);
-                    erode_heightmap_full(&mut ui.console_output_ero, &mut topo_settings);
+                    erode_heightmap_full(&mut topo_settings);
                     update_hydro_prev(&mut ui.hydro_preview, true);
                     update_hydro_prev(&mut ui.hydro_mask_preview, false);
                 }
@@ -1081,7 +1207,6 @@ fn main() {
                     camera.rotate_around_with_fixed_up(&target, -300.0, 0.0);
                     let camera_act_pos = Vec3::new(camera.position().x, camera_y, camera.position().z);
                     camera.set_view(camera_act_pos, target, Vec3::new(0.0, 1.0, 0.0));
-
                 }
                 Message::WeatherSeedInput => {
                     weather_seed_do(&mut ui.weather_seed_input, &mut weather_settings);
@@ -1094,34 +1219,68 @@ fn main() {
                 }
                 Message::WeatherClimInput => {
                     weather_climate_do(&mut ui.weather_type, &mut weather_settings, &climates);
+                    println!("Weather Info: {:?}", weather_settings);
                 }
                 Message::WeatherRandomSeed => {
                     weather_seed_random_do(&mut ui.weather_noise_random_seed, &mut ui.weather_seed_input, &mut weather_settings);
                 }
                 Message::GenWeather => {
-                    let map = image_crate::open("example_images/eroded_cache.png").unwrap().into_luma16();
-                    let component_size = 512.0 / weather_settings.grid_size as f64;
-                    for x in 0..weather_settings.grid_size {
-                        for y in 0..6 {
-                            for z in 0..weather_settings.grid_size {
-                                let h = match y.clone() { 
-                                    0 => get_height(&map, topo_settings.max_height as f64, ((component_size * x as f64) as u32, (component_size * y as f64) as u32)),
-                                    _ => 4000 * y,
-                                };
-                                let component = GridComponent {
-                                    index: Default::default(),
-                                    mean_altitude: 0.0,
-                                    temperature: 0.0,
-                                    wind_p: Default::default(),
-                                    pressure: 0.0,
-                                    humidity: 0.0,
-                                    td: 0.0,
-                                };
-                            }
-                        }
-                    }
-                }
 
+                    let noise: Fbm<Perlin> = Fbm::new(weather_settings.seed.unwrap());
+                    let map = image_crate::open("example_images/eroded_cache.png").unwrap().into_luma16();
+                    let map2 = map.clone();
+                    let terrain_map = Terrain::new(
+                        &context,
+                        terrain_material.clone(),
+                        Arc::new(
+                            move |x, y| {
+                                *map2.get_pixel(x as u32, y as u32).channels().first().unwrap() as f32 * 0.01
+                            }
+                        ),
+                        512.0,
+                        1.0,
+                        three_d::prelude::Vec2::new(255.0, 255.0)
+                    );
+                    terrain = terrain_map;
+                    let component_size = 512.0 / weather_settings.grid_size as f64;
+
+                    for component in grid.as_mut_slice() {
+                        let h = match y {
+                            0 => get_height(&map, topo_settings.max_height as f64, ((component_size * x as f64) as u32, (component_size * y as f64) as u32)),
+                            _ => 4000 * y as u16,
+                        };
+                        component.altitude = h as f64;
+                        let gen = GenData::gen_year_data(weather_settings.latitude as i32, component.altitude, component.index, noise.clone(), weather_settings.koppen.clone().unwrap());
+
+                        component.humidity = gen.humidity;
+                        component.pressure = gen.pressure;
+                        component.td = gen.td;
+                        component.temperature = gen.temperature;
+                        component.wind = gen.wind;
+
+                    }
+                    println!("Finished.");
+                },
+                Message::ViewHumidity => {
+                    set_view_state(&mut view_state, WeatherVisualization::Humidity);
+                    update_grid_at_time(view_state.hour, view_state.mode, &mut grid, &mut mesh_v);
+                },
+                Message::ViewPressure => {
+                    set_view_state(&mut view_state, WeatherVisualization::Pressure);
+                    update_grid_at_time(view_state.hour, view_state.mode, &mut grid, &mut mesh_v);
+                },
+                Message::ViewTemperature => {
+                    set_view_state(&mut view_state, WeatherVisualization::Temperature);
+                    update_grid_at_time(view_state.hour, view_state.mode, &mut grid, &mut mesh_v);
+                },
+                Message::ViewWind => {
+                    set_view_state(&mut view_state, WeatherVisualization::Wind);
+                    update_grid_at_time(view_state.hour, view_state.mode, &mut grid, &mut mesh_v);
+                },
+                Message::DaySlider => {
+                    set_hour(&mut ui.day_vis_slider, &mut view_state);
+                    update_grid_at_time(view_state.hour, view_state.mode, &mut grid, &mut mesh_v);
+                }
             }
         }
         {
@@ -1133,9 +1292,9 @@ fn main() {
                 .clear(ClearState::color_and_depth(0.8, 0.8, 0.8, 1.0, 1.0))
                 // Render the triangle with the per vertex colors defined at construction
                 .render(&camera, &terrain, &[&directional, &ambient]);
-            for x in 0..16 {
+            for x in 0..weather_settings.grid_size as usize {
                 for y in 0..6 {
-                    for z in 0..16 {
+                    for z in 0..weather_settings.grid_size as usize {
                         rt.render(&camera, &mesh_v[x + 16 *(y + 6 * z)], &[&directional, &ambient]);
                     }
                 }
