@@ -13,12 +13,12 @@ use ordered_float::OrderedFloat;
 use crate::weather::HumidDry::{Dry, Humid};
 
 const COLD_SPRING: Range<f32> = 0.0..15.0;
-const COLD_WINTER: Range<f32> = -25.0..0.0;
+const COLD_WINTER: Range<f32> = -25.0..5.0;
 const COLD_FALL: Range<f32> = -10.0..5.0;
 const COLD_SUMMER: Range<f32> = 5.0..17.0;
 
 const TEMPERATE_SPRING: Range<f32> = 15.0..20.0;
-const TEMPERATE_WINTER: Range<f32> = 0.0..11.0;
+const TEMPERATE_WINTER: Range<f32> = 0.0..15.0;
 const TEMPERATE_FALL: Range<f32> = 7.0..15.0;
 const TEMPERATE_SUMMER: Range<f32> = 20.0..27.0;
 
@@ -429,7 +429,6 @@ impl GenData {
         land_pressure * (1. - frac).powf(5.257) // land pressure is given in hectopascals
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub fn calculate_rel_hum(
         temperature: f32,
         factor: f32,

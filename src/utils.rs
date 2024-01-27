@@ -2,15 +2,14 @@ use image_crate::{ImageBuffer, Luma, Pixel, Rgba};
 use noise::utils::{NoiseImage, NoiseMap};
 
 
-pub fn get_height(image: &ImageBuffer<Luma<u16>, Vec<u16>>, max: f64, area: (u32, u32)) -> u16 {
+pub fn get_height(image: &ImageBuffer<Luma<u16>, Vec<u16>>, max: f64) -> u16 {
     use map_range::MapRange;
     let mut points: Vec<u16> = vec![];
-    for x in area.0..area.1 {
-        for y in area.0..area.1 {
-            let p = image.get_pixel(x, y).channels()[0];
-            let a = p.map_range(0..32768, 0..max as u16);
+    for pixel in image.pixels().into_iter() {
+            let value = pixel.channels().first().unwrap();
+            let a = value.map_range(0..32768, 0..max as u16);
             points.push(a);
-        }
+
     }
     let median = points.iter().sum::<u16>() / points.len() as u16;
     median

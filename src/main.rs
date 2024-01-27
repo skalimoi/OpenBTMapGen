@@ -90,62 +90,39 @@ fn set_view_state(options: &mut ViewState, state: WeatherVisualization) -> Weath
 fn update_grid_at_time(hour: u32, v_type: WeatherVisualization, grid_vector: &mut Vec<GenData>, cube_vector: &mut [Gm<Mesh, ColorMaterial>]) {
     use ordered_float::OrderedFloat;
 
-    let temp_grad = colorgrad::CustomGradient::new().colors(&[
-        Color::from_rgba8(30, 92, 179, 255),
-        Color::from_rgba8(243, 240, 29, 255),
-        Color::from_rgba8(164, 38, 44, 255)
-    ]).build().unwrap();
-    let hum_grad = colorgrad::CustomGradient::new().colors(&[
-        Color::from_rgba8(230, 250, 194, 255),
-        Color::from_rgba8(205, 255, 205, 255),
-        Color::from_rgba8(153, 240, 178, 255),
-        Color::from_rgba8(83, 189, 159, 255),
-        Color::from_rgba8(50, 166, 150, 255),
-        Color::from_rgba8(50, 150, 180, 255),
-        Color::from_rgba8(5, 112, 176, 255),
-        Color::from_rgba8(5, 80, 140, 255),
-        Color::from_rgba8(10, 31, 150, 255),
-        Color::from_rgba8(44, 2, 70, 255),
-        Color::from_rgba8(106, 44, 90, 255)
-    ]).build().unwrap();
-    let pressure_grad = colorgrad::CustomGradient::new().colors(&[
-        Color::from_rgba8(21, 18, 88, 255),
-        Color::from_rgba8(92, 154, 146, 255),
-        Color::from_rgba8(219, 233, 231, 255)
-    ]).build().unwrap();
 
     for component in grid_vector.as_slice() {
-        let (min_temp, max_temp) = (component.temperature.iter().min().unwrap(), component.temperature.iter().max().unwrap());
-        let (min_pres, max_pres) = (component.pressure.iter().min().unwrap(), component.pressure.iter().max().unwrap());
-        let (min_hum, max_hum) = (component.humidity.iter().min().unwrap(), component.humidity.iter().max().unwrap());
         let cube = &mut cube_vector[component.index.0 as usize + 16 *(component.index.1 as usize + 6 * component.index.2 as usize)];
         let range = match hour {
             0 => 0..24,
             _ => (((24 * hour) - 24) as usize)..((24 * hour) as usize)
         };
-        println!("SELECTED RANGE!!!!!! : {:?}", range);
         match v_type {
             Init => {},
             WeatherVisualization::Wind => {},
             WeatherVisualization::Temperature => {
                 let median = (component.temperature[range.clone()].iter().sum::<OrderedFloat<f64>>().0 as isize) / range.clone().len() as isize;
-                let grad_position = (median as f64).map_range(min_temp.0..max_temp.0, 0.0..1.0);
-                println!("TEMP RANGE: {} -- {} -- {}", min_temp, max_temp, grad_position);
-                let color = temp_grad.at(grad_position).to_linear_rgba_u8();
-                cube.material.color = Srgba::new(color.0, color.1, color.2, 10);
-                println!("CHOSEN TEMP: {:?}", color);
+                let color = match median {
+                    -60..=-10 => Color::from_rgba8(30, 92, 179, 10),
+                    -11..=-1 => Color::from_rgba8(4, 161, 230, 10),
+                    0..=5 => Color::from_rgba8(102, 204, 206, 10),
+                    6..=10 => Color::from_rgba8(192, 229, 136, 10),
+                    11..=15 => Color::from_rgba8(204, 230, 75, 10),
+                    16..=20 => Color::from_rgba8(243, 240, 29, 10),
+                    21..=25 => Color::from_rgba8(248, 157, 14, 10),
+                    26..=30 => Color::from_rgba8(219, 30, 38, 10),
+                    31..=90 => Color::from_rgba8(164, 38, 44, 10),
+                    _ => Color::from_rgba8(255, 255, 255, 10)
+                };
+                cube.material.color = Srgba::new(color.to_linear_rgba_u8().0, color.to_linear_rgba_u8().1, color.to_linear_rgba_u8().2, color.to_linear_rgba_u8().3);
             },
             WeatherVisualization::Pressure => {
                 let median = (component.pressure[range.clone()].iter().sum::<OrderedFloat<f64>>().0 as usize) / range.clone().len();
-                let grad_position = (median as f64).map_range(min_pres.0..max_pres.0, 0.0..1.0);
-                let color = pressure_grad.at(grad_position).to_linear_rgba_u8();
-                cube.material.color = Srgba::new(color.0, color.1, color.2, 10);
+                println!("{}", median);
             },
             WeatherVisualization::Humidity => {
                 let median = (component.humidity[range.clone()].iter().sum::<OrderedFloat<f64>>().0 as usize) / range.clone().len();
-                let grad_position = (median as f64).map_range(min_hum.0..max_hum.0, 0.0..1.0);
-                let color = hum_grad.at(grad_position).to_linear_rgba_u8();
-                cube.material.color = Srgba::new(color.0, color.1, color.2, 10);
+                println!("{}", median);
             }
         }
     }
@@ -956,8 +933,12 @@ fn main() {
     win.show();
     gl_widget.show();
 
-    ui.turn_right_vis.set_image(Some(SharedImage::load("png/75.png").unwrap()));
-    ui.turn_left_vis.set_image(Some(SharedImage::load("png/76.png").unwrap()));
+    ui.turn_right_vis.set_image(Some(SharedImage::load("icons/turn_right.png").unwrap()));
+    ui.turn_left_vis.set_image(Some(SharedImage::load("icons/turn_left.png").unwrap()));
+    ui.wind_mode.set_image(Some(SharedImage::load("icons/wind.png").unwrap()));
+    ui.temperature_mode.set_image(Some(SharedImage::load("icons/temperature.png").unwrap()));
+    ui.humidity_mode.set_image(Some(SharedImage::load("icons/humidity.png").unwrap()));
+    ui.pressure_mode.set_image(Some(SharedImage::load("icons/pressure.png").unwrap()));
 
     /////////////
 
@@ -1245,20 +1226,25 @@ fn main() {
                     let component_size = 512.0 / weather_settings.grid_size as f64;
 
                     for component in grid.as_mut_slice() {
-                        let h = match y {
-                            0 => get_height(&map, topo_settings.max_height as f64, ((component_size * x as f64) as u32, (component_size * y as f64) as u32)),
-                            _ => 4000 * y as u16,
-                        };
-                        component.altitude = h as f64;
-                        let gen = GenData::gen_year_data(weather_settings.latitude as i32, component.altitude, component.index, noise.clone(), weather_settings.koppen.clone().unwrap());
+                                let area = heightmap_opt_dyn.crop_imm(component_size as u32 * component.index.0 as u32, component_size as u32 * component.index.2 as u32, component_size as u32, component_size as u32).to_luma16();
+                                let h = match component.index.1 {
+                                    0 => get_height(&area, topo_settings.max_height as f64),
+                                    _ => 4000 * component.index.1 as u16,
+                                };
+                                component.altitude = h as f64;
+                                println!("ALTITUDE: {}", h);
+                                let gen = GenData::gen_year_data(weather_settings.latitude as i32, component.altitude, component.index, noise.clone(), weather_settings.koppen.clone().unwrap());
 
-                        component.humidity = gen.humidity;
-                        component.pressure = gen.pressure;
-                        component.td = gen.td;
-                        component.temperature = gen.temperature;
-                        component.wind = gen.wind;
+                                component.humidity = gen.humidity;
+                                component.pressure = gen.pressure;
+                                component.td = gen.td;
+                                component.temperature = gen.temperature;
+                                component.wind = gen.wind;
+                                println!("GENDATA ALTITUDE: {}", component.altitude);
 
                     }
+
+
                     println!("Finished.");
                 },
                 Message::ViewHumidity => {
@@ -1295,7 +1281,7 @@ fn main() {
             for x in 0..weather_settings.grid_size as usize {
                 for y in 0..6 {
                     for z in 0..weather_settings.grid_size as usize {
-                        rt.render(&camera, &mesh_v[x + 16 *(y + 6 * z)], &[&directional, &ambient]);
+                        rt.render(&camera, &mesh_v[x + (weather_settings.grid_size as usize) *(y + 6 * z)], &[&directional, &ambient]);
                     }
                 }
             }
