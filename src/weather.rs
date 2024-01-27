@@ -426,7 +426,7 @@ impl GenData {
     pub fn calculate_pressure(altitude: f32, temperature: f32, land_pressure: f32) -> f32 {
         let frac = (0.0065 * altitude) / (temperature + (0.0065 * altitude) + 273.15);
 
-        land_pressure * (1. - frac).powf(5.257) // land pressure is given in hectopascals
+        land_pressure * (1.0 - frac).powf(5.257) // land pressure is given in hectopascals
     }
 
     pub fn calculate_rel_hum(

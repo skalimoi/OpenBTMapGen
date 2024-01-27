@@ -1,17 +1,17 @@
-use image_crate::{ImageBuffer, Luma, Pixel, Rgba};
+use image_crate::{DynamicImage, GenericImageView, ImageBuffer, Luma, Pixel, Rgba};
+use map_range::CheckedMapRange;
 use noise::utils::{NoiseImage, NoiseMap};
 
 
-pub fn get_height(image: &ImageBuffer<Luma<u16>, Vec<u16>>, max: f64) -> u16 {
-    use map_range::MapRange;
-    let mut points: Vec<u16> = vec![];
-    for pixel in image.pixels().into_iter() {
+pub fn get_height(image: &DynamicImage, max: f64, min_value_total: u16, max_value_total: u16) -> i32 {
+    let map = image.to_luma16();
+    let mut points: Vec<i32> = vec![];
+    for pixel in map.pixels() {
             let value = pixel.channels().first().unwrap();
-            let a = value.map_range(0..32768, 0..max as u16);
+            let a = (*value as i32).checked_map_range((min_value_total as i32)..(max_value_total as i32), 1..(max as i32)).unwrap();
             points.push(a);
-
     }
-    let median = points.iter().sum::<u16>() / points.len() as u16;
+    let median = points.iter().sum::<i32>() / points.len() as i32;
     median
 
 }
