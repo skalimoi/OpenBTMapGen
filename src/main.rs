@@ -103,17 +103,81 @@ fn update_grid_at_time(hour: u32, grid_vector: &mut Vec<GenData>, cube_vector: &
             Init => {},
             WeatherVisualization::Wind => {},
             WeatherVisualization::Temperature => {
-                let median = (component.temperature[range.clone()].iter().sum::<OrderedFloat<f64>>().0 as isize) / range.clone().len() as isize;
+                if !component.pressure.is_empty() {
+                    let median = (component.temperature[range.clone()].iter().sum::<OrderedFloat<f64>>().0 as isize) / range.clone().len() as isize;
+                    let color = match median {
+                        -60..=-10 => Color::from_rgba8(30, 92, 179, 10),
+                        -11..=-1 => Color::from_rgba8(4, 161, 230, 10),
+                        0..=5 => Color::from_rgba8(102, 204, 206, 10),
+                        6..=10 => Color::from_rgba8(192, 229, 136, 10),
+                        11..=15 => Color::from_rgba8(204, 230, 75, 10),
+                        16..=20 => Color::from_rgba8(243, 240, 29, 10),
+                        21..=25 => Color::from_rgba8(248, 157, 14, 10),
+                        26..=30 => Color::from_rgba8(219, 30, 38, 10),
+                        31..=90 => Color::from_rgba8(164, 38, 44, 10),
+                        _ => Color::from_rgba8(255, 255, 255, 10)
+                    };
+                    let color_rgba = color.to_linear_rgba_u8();
+                    let mut opacity = 10;
+
+                    match state.layer {
+                        0 => {opacity = 10},
+                        1 => {if component.index.1 != 0 {opacity = 0}},
+                        2 => {if component.index.1 != 1 {opacity = 0}},
+                        3 => {if component.index.1 != 2 {opacity = 0}},
+                        4 => {if component.index.1 != 3 {opacity = 0}},
+                        5 => {if component.index.1 != 4 {opacity = 0}},
+                        6 => {if component.index.1 != 5 {opacity = 0}},
+                        _ => { opacity = 10 }
+                    }
+                    if color.r == 1.0 && color.g == 1.0 && color.b == 1.0 {
+                        opacity = 0;
+                    }
+                    cube.material.color = Srgba::new(color_rgba.0, color_rgba.1, color_rgba.2, opacity);
+                }
+            },
+            WeatherVisualization::Pressure => {
+                if !component.pressure.is_empty() {
+                    let median = (component.pressure[range.clone()].iter().sum::<OrderedFloat<f64>>().0 as usize) / range.clone().len();
+                    println!("PRESSURE: {}", median);
+                    let color = match median {
+                        50..=950 => Color::from_rgba8(40, 40, 255, 10) ,
+                        951..=990 => Color::from_rgba8(102, 102, 255, 10),
+                        991..=1000 => Color::from_rgba8(161, 161, 255, 10),
+                        1001..=1015 => Color::from_rgba8(203, 203, 255, 10),
+                        1016..=1030 => Color::from_rgba8(255, 138, 138, 10),
+                        1031..=1060 => Color::from_rgba8(255, 103, 103, 10),
+                        1061..=2000 => Color::from_rgba8(255, 41, 41, 10),
+                        _ => Color::from_rgba8(255, 255, 255, 10)
+                    };
+                    let color_rgba = color.to_linear_rgba_u8();
+                    let mut opacity = 10;
+                    match state.layer {
+                        0 => {opacity = 10},
+                        1 => {if component.index.1 != 0 {opacity = 0}},
+                        2 => {if component.index.1 != 1 {opacity = 0}},
+                        3 => {if component.index.1 != 2 {opacity = 0}},
+                        4 => {if component.index.1 != 3 {opacity = 0}},
+                        5 => {if component.index.1 != 4 {opacity = 0}},
+                        6 => {if component.index.1 != 5 {opacity = 0}},
+                        _ => { opacity = 10 }
+                    }
+                    cube.material.color = Srgba::new(color_rgba.0, color_rgba.1, color_rgba.2, opacity);
+                }
+            },
+            WeatherVisualization::Humidity => {
+                let median = (component.humidity[range.clone()].iter().sum::<OrderedFloat<f64>>().0 as usize) / range.clone().len();
                 let color = match median {
-                    -60..=-10 => Color::from_rgba8(30, 92, 179, 10),
-                    -11..=-1 => Color::from_rgba8(4, 161, 230, 10),
-                    0..=5 => Color::from_rgba8(102, 204, 206, 10),
-                    6..=10 => Color::from_rgba8(192, 229, 136, 10),
-                    11..=15 => Color::from_rgba8(204, 230, 75, 10),
-                    16..=20 => Color::from_rgba8(243, 240, 29, 10),
-                    21..=25 => Color::from_rgba8(248, 157, 14, 10),
-                    26..=30 => Color::from_rgba8(219, 30, 38, 10),
-                    31..=90 => Color::from_rgba8(164, 38, 44, 10),
+                    0..=10 => Color::from_rgba8(255, 255, 217, 10),
+                    11..=20 => Color::from_rgba8(237, 248, 177, 10),
+                    21..=30 => Color::from_rgba8(199, 233, 180, 10),
+                    31..=40 => Color::from_rgba8(127, 205, 187, 10),
+                    41..=50 => Color::from_rgba8(65, 182, 196, 10),
+                    51..=60 => Color::from_rgba8(29, 145, 192, 10),
+                    61..=70 => Color::from_rgba8(34, 94, 168, 10),
+                    71..=80 => Color::from_rgba8(37, 52, 148, 10),
+                    81..=90 => Color::from_rgba8(8, 29, 88, 10),
+                    91..=100 => Color::from_rgba8(3, 20, 70, 10),
                     _ => Color::from_rgba8(255, 255, 255, 10)
                 };
                 let color_rgba = color.to_linear_rgba_u8();
@@ -133,37 +197,6 @@ fn update_grid_at_time(hour: u32, grid_vector: &mut Vec<GenData>, cube_vector: &
                     opacity = 0;
                 }
                 cube.material.color = Srgba::new(color_rgba.0, color_rgba.1, color_rgba.2, opacity);
-            },
-            WeatherVisualization::Pressure => {
-                let median = (component.pressure[range.clone()].iter().sum::<OrderedFloat<f64>>().0 as usize) / range.clone().len();
-                println!("PRESSURE: {}", median);
-                let color = match median {
-                    50..=950 => Color::from_rgba8(40, 40, 255, 10) ,
-                    951..=990 => Color::from_rgba8(102, 102, 255, 10),
-                    991..=1000 => Color::from_rgba8(161, 161, 255, 10),
-                    1001..=1015 => Color::from_rgba8(203, 203, 255, 10),
-                    1016..=1030 => Color::from_rgba8(255, 138, 138, 10),
-                    1031..=1060 => Color::from_rgba8(255, 103, 103, 10),
-                    1061..=2000 => Color::from_rgba8(255, 41, 41, 10),
-                    _ => Color::from_rgba8(255, 255, 255, 10)
-                };
-                let color_rgba = color.to_linear_rgba_u8();
-                let mut opacity = 10;
-                match state.layer {
-                    0 => {opacity = 10},
-                    1 => {if component.index.1 != 0 {opacity = 0}},
-                    2 => {if component.index.1 != 1 {opacity = 0}},
-                    3 => {if component.index.1 != 2 {opacity = 0}},
-                    4 => {if component.index.1 != 3 {opacity = 0}},
-                    5 => {if component.index.1 != 4 {opacity = 0}},
-                    6 => {if component.index.1 != 5 {opacity = 0}},
-                    _ => { opacity = 10 }
-                }
-                cube.material.color = Srgba::new(color_rgba.0, color_rgba.1, color_rgba.2, opacity);
-            },
-            WeatherVisualization::Humidity => {
-                let median = (component.humidity[range.clone()].iter().sum::<OrderedFloat<f64>>().0 as usize) / range.clone().len();
-                println!("{}", median);
             }
         }
     }
@@ -1303,7 +1336,7 @@ fn main() {
                                         let area = dynamic.clone().crop_imm(component_size as u32 * component.index.0 as u32, component_size as u32 * component.index.2 as u32, component_size as u32, component_size as u32);
                                         h = get_height(&area, topo_settings.max_height as f64, *min_total, *max_total);
                                     },
-                                    _ => { h = 4000 * component.index.1 as i32; },
+                                    _ => { h = 4000 * component.index.1; },
                                 };
                                 component.altitude = h as f64;
                                 let gen = GenData::gen_year_data(weather_settings.latitude as i32, component.altitude, component.index, noise.clone(), weather_settings.koppen.clone().unwrap());
@@ -1320,16 +1353,20 @@ fn main() {
                 Message::ViewHumidity => {
                     set_view_state(&mut view_state, WeatherVisualization::Humidity);
                     update_grid_at_time(view_state.hour, &mut grid, &mut mesh_v, &view_state);
+                    ui.legend_box.set_image(Some(SharedImage::load("icons/humidity_legend.png").unwrap()));
+                    ui.legend_box.redraw_label();
                 },
                 Message::ViewPressure => {
                     set_view_state(&mut view_state, WeatherVisualization::Pressure);
                     update_grid_at_time(view_state.hour, &mut grid, &mut mesh_v, &view_state);
+                    ui.legend_box.set_image(Some(SharedImage::load("icons/pressure_legend.png").unwrap()));
+                    ui.legend_box.redraw_label();
                 },
                 Message::ViewTemperature => {
                     set_view_state(&mut view_state, WeatherVisualization::Temperature);
                     update_grid_at_time(view_state.hour, &mut grid, &mut mesh_v, &view_state);
                     ui.legend_box.set_image(Some(SharedImage::load("icons/temp_legend.png").unwrap()));
-                    ui.legend_box.redraw();
+                    ui.legend_box.redraw_label();
                 },
                 Message::ViewWind => {
                     set_view_state(&mut view_state, WeatherVisualization::Wind);

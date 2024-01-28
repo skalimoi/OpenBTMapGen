@@ -450,6 +450,7 @@ impl GenData {
         (hum, td)
     }
 
+    #[deny(clippy::eq_op)]
     fn seasonal_factor(latitude: i32, season: Season, climate: &Climate) -> f32 {
 
         let season_factor: f32 = match (season, latitude) {
@@ -486,12 +487,18 @@ impl GenData {
 
         let range = match seasonal_factor_hum {
             HumidDry::None => 0..season_factor as i32,
-            HumidDry::Dry => (season_factor * (4.0 / 6.0)) as i32..season_factor as i32,
-            HumidDry::Humid => 0..(season_factor * (2.0 / 6.0)) as i32
+            Dry => (season_factor * (5.5 / 6.0)) as i32..season_factor as i32,
+            Humid => 0..(season_factor * (2.0 / 6.0)) as i32
         };
 
         let mut rng = thread_rng();
-        rng.gen_range(range) as f32
+        let mut r = rng.gen_range(range) as f32;
+        // r = match seasonal_factor_hum {
+        //     HumidDry::Dry => r * rng.gen_range(3.0..4.0),
+        //     HumidDry::Humid => r * 1.25,
+        //     HumidDry::None => r * 2.5
+        // };
+        r
     }
 
 
@@ -570,10 +577,12 @@ impl GenData {
 
             // ---- PRESSURE ---- //
 
+            let base_pressure = rng.gen_range(995..=1060);
+
             for hour in 1..=24 {
                 let index = hour * day;
                 let temp_value = temperature_vec.get(index - 1).unwrap();
-                let pres = Self::calculate_pressure(altitude as f32, temp_value.0 as f32, 1013.25);
+                let pres = Self::calculate_pressure(altitude as f32, temp_value.0 as f32, base_pressure as f32);
                 pressure_vec.push(OrderedFloat(pres as f64));
             }
 
