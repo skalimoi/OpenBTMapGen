@@ -2,3 +2,4 @@ target
 .github
 .lapce
 .replit
+*.ron

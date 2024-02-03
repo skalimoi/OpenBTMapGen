@@ -1,6 +1,7 @@
 use image_crate::{DynamicImage, GenericImageView, ImageBuffer, Luma, Pixel, Rgba};
 use map_range::CheckedMapRange;
 use noise::utils::{NoiseImage, NoiseMap};
+use crate::FileData;
 
 
 pub fn get_height(image: &DynamicImage, max: f64, min_value_total: u16, max_value_total: u16) -> i32 {
@@ -16,21 +17,7 @@ pub fn get_height(image: &DynamicImage, max: f64, min_value_total: u16, max_valu
 
 }
 
-pub fn write_map_to_file(map: &NoiseMap, filename: &str) {
-    use std::{fs, path::Path};
-
-    // Create the output directory for the images, if it doesn't already exist
-    let target_dir = Path::new("example_images/");
-
-    if !target_dir.exists() {
-        fs::create_dir(target_dir).expect("failed to create example_images directory");
-    }
-
-    //concatenate the directory to the filename string
-    let directory: String = "example_images/".to_owned();
-    let file_path = directory + filename;
-
-    // collect the values from f64 into u8 in a separate vec
+pub fn get_raw_u16(map: &NoiseMap) -> Vec<u16> {
     let (width, height) = map.size();
     let mut b: ImageBuffer<Luma<u16>, Vec<u16>> = ImageBuffer::new(width as u32, height as u32);
 
@@ -41,28 +28,11 @@ pub fn write_map_to_file(map: &NoiseMap, filename: &str) {
             b.put_pixel(x as u32, y as u32, Luma([l]));
         }
     }
-
-
-    b.save(file_path);
-
-    println!("\nFinished generating {}", filename);
+    let n = b.clone();
+    n.as_raw().to_vec()
 }
 
-pub fn write_to_file(map: &NoiseImage, filename: &str) {
-    use std::{fs, path::Path};
-
-    // Create the output directory for the images, if it doesn't already exist
-    let target_dir = Path::new("example_images/");
-
-    if !target_dir.exists() {
-        fs::create_dir(target_dir).expect("failed to create example_images directory");
-    }
-
-    //concatenate the directory to the filename string
-    let directory: String = "example_images/".to_owned();
-    let file_path = directory + filename;
-
-    // collect the values from the map vector into an array
+pub fn get_raw_u8(map: &NoiseImage) -> Vec<u8> {
     let (width, height) = map.size();
     let mut b: ImageBuffer<Rgba<u8>, Vec<u8>> = ImageBuffer::new(width as u32, height as u32);
 
@@ -73,8 +43,5 @@ pub fn write_to_file(map: &NoiseImage, filename: &str) {
             b.put_pixel(x as u32, y as u32, Rgba(s));
         }
     }
-
-    let _ = b.save(file_path);
-
-    println!("\nFinished generating {}", filename);
+    b.as_raw().to_vec()
 }

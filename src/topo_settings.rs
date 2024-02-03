@@ -1,11 +1,13 @@
-#[derive(Copy, Clone, Debug)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
 pub enum NoiseTypesUi {
     Simplex,
     Perlin,
     BillowPerlin
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
 pub struct TopoSettings {
     pub seed: Option<u32>,
     pub noise_type: Option<NoiseTypesUi>,

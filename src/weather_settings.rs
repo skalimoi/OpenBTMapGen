@@ -1,7 +1,7 @@
-
+use serde::{Deserialize, Serialize};
 use crate::weather::Climate;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct WeatherSettings {
     pub seed: Option<u32>,
     pub koppen: Option<Climate>,

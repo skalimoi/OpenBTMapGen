@@ -36,7 +36,7 @@ pub const EQUATOR_TEMP_RANGE: Range<f32> = 0.0..3.0;
 pub const TEMPERATE_TEMP_RANGE: Range<f32> = 7.0..10.0;
 pub const CONTINENTAL_POLAR_TEMP_RANGE: Range<f32> = 12.0..25.0;
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
 pub enum HumidDry {
     Humid,
     Dry,
@@ -61,22 +61,22 @@ pub struct GridComponent {
 
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Climate {
     pub name: String,
     pub general_type: char,
     pub second_type: char,
     pub third_type: char,
-    pub spring: Range<f32>,
+    pub spring: (HumidDry, Range<f32>),
     pub winter: (HumidDry, Range<f32>),
-    pub fall: Range<f32>,
+    pub fall: (HumidDry, Range<f32>),
     pub summer: (HumidDry, Range<f32>),
     pub diurnal_range: Range<f32>
 }
 
 // TODO: evapotranspiration? Precipitation type?
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialOrd, PartialEq)]
 pub enum Season {
     Winter,
     Spring,
@@ -90,9 +90,9 @@ pub fn koppen_et() -> Climate {
         general_type: 'E',
         second_type: 'T',
         third_type: '_',
-        spring: COLD_SPRING,
+        spring: (Dry, COLD_SPRING),
         winter: (Dry, COLD_WINTER),
-        fall: COLD_FALL,
+        fall: (Dry, COLD_FALL),
         summer: (Dry, COLD_SUMMER),
         diurnal_range: CONTINENTAL_POLAR_TEMP_RANGE
     }
@@ -104,9 +104,9 @@ pub fn koppen_afam() -> Climate {
         general_type: 'A',
         second_type: 'F',
         third_type: '_',
-        spring: HOT_SPRING,
+        spring: (HumidDry::None, HOT_SPRING),
         winter: (HumidDry::None, HOT_WINTER),
-        fall: HOT_FALL,
+        fall: (HumidDry::None, HOT_FALL),
         summer: (Humid, HOT_SUMMER),
         diurnal_range: EQUATOR_TEMP_RANGE
     }
@@ -117,10 +117,10 @@ pub fn koppen_as() -> Climate {
         general_type: 'A',
         second_type: 'F',
         third_type: '_',
-        spring: HOT_SPRING,
+        spring: (HumidDry::None, HOT_SPRING),
         winter: (HumidDry::None, HOT_WINTER),
-        fall: HOT_FALL,
-        summer: (HumidDry::None, HOT_SUMMER),
+        fall: (HumidDry::None, HOT_FALL),
+        summer: (HumidDry::Dry, HOT_SUMMER),
         diurnal_range: EQUATOR_TEMP_RANGE
     }
 }
@@ -130,9 +130,9 @@ pub fn koppen_aw() -> Climate {
         general_type: 'A',
         second_type: 'F',
         third_type: '_',
-        spring: HOT_SPRING,
+        spring: (HumidDry::None, HOT_SPRING),
         winter: (Humid, HOT_WINTER),
-        fall: HOT_FALL,
+        fall: (HumidDry::None, HOT_FALL),
         summer: (HumidDry::None, HOT_SUMMER),
         diurnal_range: EQUATOR_TEMP_RANGE
     }
@@ -143,9 +143,9 @@ pub fn koppen_bsh() -> Climate {
         general_type: 'B',
         second_type: 'S',
         third_type: 'H',
-        spring: WARM_SPRING,
+        spring: (HumidDry::None, WARM_SPRING),
         winter: (Dry, WARM_WINTER),
-        fall: TEMPERATE_FALL,
+        fall: (HumidDry::Dry, TEMPERATE_FALL),
         summer: (HumidDry::None, HOT_SUMMER),
         diurnal_range: CONTINENTAL_POLAR_TEMP_RANGE
     }
@@ -157,9 +157,9 @@ pub fn koppen_bsk() -> Climate {
         general_type: 'B',
         second_type: 'S',
         third_type: 'H',
-        spring: COLD_SPRING,
+        spring: (HumidDry::None, COLD_SPRING),
         winter: (Dry, COLD_WINTER),
-        fall: COLD_FALL,
+        fall: (HumidDry::Dry, COLD_FALL),
         summer: (HumidDry::None, COLD_SUMMER),
         diurnal_range: CONTINENTAL_POLAR_TEMP_RANGE
     }
@@ -171,9 +171,9 @@ pub fn koppen_bwh() -> Climate {
         general_type: 'B',
         second_type: 'W',
         third_type: 'H',
-        spring: HOT_SPRING,
+        spring: (Dry,HOT_SPRING),
         winter: (Dry, HOT_WINTER),
-        fall: HOT_FALL,
+        fall: (Dry, HOT_FALL),
         summer: (Dry, HOT_SUMMER),
         diurnal_range: TEMPERATE_TEMP_RANGE
     }
@@ -184,9 +184,9 @@ pub fn koppen_bwk() -> Climate {
         general_type: 'B',
         second_type: 'W',
         third_type: 'K',
-        spring: TEMPERATE_SPRING,
+        spring: (Dry, TEMPERATE_SPRING),
         winter: (Dry, COLD_WINTER),
-        fall: TEMPERATE_FALL,
+        fall: (Dry, TEMPERATE_FALL),
         summer: (Dry, COLD_SUMMER),
         diurnal_range: TEMPERATE_TEMP_RANGE
     }
@@ -197,9 +197,9 @@ pub fn koppen_cfa() -> Climate {
         general_type: 'C',
         second_type: 'F',
         third_type: 'A',
-        spring: TEMPERATE_SPRING,
+        spring: (HumidDry::None, TEMPERATE_SPRING),
         winter: (Humid, TEMPERATE_WINTER),
-        fall: TEMPERATE_FALL,
+        fall: (HumidDry::None, TEMPERATE_FALL),
         summer: (Humid, HOT_SUMMER),
         diurnal_range: TEMPERATE_TEMP_RANGE
     }
@@ -210,9 +210,9 @@ pub fn koppen_cfb() -> Climate {
         general_type: 'C',
         second_type: 'F',
         third_type: 'B',
-        spring: TEMPERATE_SPRING,
+        spring: (HumidDry::None, TEMPERATE_SPRING),
         winter: (Humid, TEMPERATE_WINTER),
-        fall: TEMPERATE_FALL,
+        fall: (HumidDry::None, TEMPERATE_FALL),
         summer: (Humid, WARM_SUMMER),
         diurnal_range: TEMPERATE_TEMP_RANGE
     }
@@ -224,9 +224,9 @@ pub fn koppen_cfc() -> Climate {
         general_type: 'C',
         second_type: 'F',
         third_type: 'C',
-        spring: TEMPERATE_SPRING,
+        spring: (HumidDry::None, TEMPERATE_SPRING),
         winter: (Humid, COLD_WINTER),
-        fall: COLD_FALL,
+        fall: (HumidDry::None, COLD_FALL),
         summer: (Humid, TEMPERATE_WINTER),
         diurnal_range: TEMPERATE_TEMP_RANGE
     }
@@ -238,9 +238,9 @@ pub fn koppen_csa() -> Climate {
         general_type: 'C',
         second_type: 'S',
         third_type: 'A',
-        spring: WARM_SPRING,
+        spring: (HumidDry::None, WARM_SPRING),
         winter: (HumidDry::None, TEMPERATE_WINTER),
-        fall: TEMPERATE_FALL,
+        fall: (HumidDry::None, TEMPERATE_FALL),
         summer: (Dry, HOT_SUMMER),
         diurnal_range: TEMPERATE_TEMP_RANGE
     }
@@ -251,9 +251,9 @@ pub fn koppen_csb() -> Climate {
         general_type: 'B',
         second_type: 'W',
         third_type: 'H',
-        spring: WARM_SPRING,
+        spring: (HumidDry::None, WARM_SPRING),
         winter: (HumidDry::None, TEMPERATE_WINTER),
-        fall: TEMPERATE_FALL,
+        fall: (HumidDry::None, TEMPERATE_FALL),
         summer: (Dry, WARM_SUMMER),
         diurnal_range: TEMPERATE_TEMP_RANGE
     }
@@ -274,9 +274,9 @@ pub fn koppen_cwa() -> Climate {
         general_type: 'C',
         second_type: 'W',
         third_type: 'A',
-        spring: WARM_SPRING,
+        spring: (HumidDry::None, WARM_SPRING),
         winter: (Dry, TEMPERATE_WINTER),
-        fall: TEMPERATE_FALL,
+        fall: (HumidDry::Dry, TEMPERATE_FALL),
         summer: (Humid, HOT_SUMMER),
         diurnal_range: TEMPERATE_TEMP_RANGE
     }
@@ -287,9 +287,9 @@ pub fn koppen_cwb() -> Climate {
         general_type: 'C',
         second_type: 'W',
         third_type: 'B',
-        spring: WARM_SPRING,
+        spring:(HumidDry::Dry, WARM_SPRING),
         winter: (Dry, TEMPERATE_WINTER),
-        fall: TEMPERATE_FALL,
+        fall: (HumidDry::None, TEMPERATE_FALL),
         summer: (Humid, WARM_SUMMER),
         diurnal_range: CONTINENTAL_POLAR_TEMP_RANGE
     }
@@ -301,9 +301,9 @@ pub fn koppen_cwc() -> Climate {
         general_type: 'C',
         second_type: 'W',
         third_type: 'C',
-        spring: TEMPERATE_SPRING,
+        spring: (HumidDry::None, TEMPERATE_SPRING),
         winter: (Dry, TEMPERATE_WINTER),
-        fall: COLD_FALL,
+        fall: (HumidDry::Dry, COLD_FALL),
         summer: (Humid, COLD_SUMMER),
         diurnal_range: CONTINENTAL_POLAR_TEMP_RANGE
     }
@@ -314,9 +314,9 @@ pub fn koppen_dfa() -> Climate {
         general_type: 'D',
         second_type: 'F',
         third_type: 'A',
-        spring: TEMPERATE_SPRING,
+        spring: (HumidDry::Dry, TEMPERATE_SPRING),
         winter: (Humid, COLD_WINTER),
-        fall: TEMPERATE_FALL,
+        fall: (HumidDry::Dry, TEMPERATE_FALL),
         summer: (Humid, HOT_SUMMER),
         diurnal_range: CONTINENTAL_POLAR_TEMP_RANGE
     }
@@ -328,9 +328,9 @@ pub fn koppen_dfb() -> Climate {
         general_type: 'D',
         second_type: 'F',
         third_type: 'B',
-        spring: TEMPERATE_SPRING,
+        spring: (HumidDry::Dry, TEMPERATE_SPRING),
         winter: (Humid, COLD_WINTER),
-        fall: TEMPERATE_FALL,
+        fall: (HumidDry::Dry, TEMPERATE_FALL),
         summer: (Humid, WARM_SUMMER),
         diurnal_range: TEMPERATE_TEMP_RANGE
     }
@@ -342,9 +342,9 @@ pub fn koppen_dfc() -> Climate {
         general_type: 'D',
         second_type: 'F',
         third_type: 'C',
-        spring: TEMPERATE_SPRING,
+        spring: (HumidDry::None, TEMPERATE_SPRING),
         winter: (Humid, COLD_WINTER),
-        fall: COLD_FALL,
+        fall: (HumidDry::None, COLD_FALL),
         summer: (Humid, COLD_SUMMER),
         diurnal_range: CONTINENTAL_POLAR_TEMP_RANGE
     }
@@ -356,9 +356,9 @@ pub fn koppen_dsa() -> Climate {
         general_type: 'D',
         second_type: 'S',
         third_type: 'A',
-        spring: HOT_SPRING,
+        spring: (HumidDry::Dry, HOT_SPRING),
         winter: (HumidDry::None, COLD_WINTER),
-        fall: COLD_FALL,
+        fall: (HumidDry::None, COLD_FALL),
         summer: (Dry, HOT_SUMMER),
         diurnal_range: CONTINENTAL_POLAR_TEMP_RANGE
     }
@@ -370,9 +370,9 @@ pub fn koppen_dsb() -> Climate {
         general_type: 'D',
         second_type: 'S',
         third_type: 'B',
-        spring: WARM_SPRING,
+        spring: (Dry, WARM_SPRING),
         winter: (HumidDry::None, COLD_WINTER),
-        fall: COLD_FALL,
+        fall: (HumidDry::None, COLD_FALL),
         summer: (Dry, WARM_SUMMER),
         diurnal_range: CONTINENTAL_POLAR_TEMP_RANGE
     }
@@ -384,15 +384,15 @@ pub fn koppen_dsc() -> Climate {
         general_type: 'D',
         second_type: 'S',
         third_type: 'C',
-        spring: COLD_SPRING,
+        spring: (HumidDry::Dry, COLD_SPRING),
         winter: (HumidDry::None, COLD_WINTER),
-        fall: COLD_FALL,
+        fall: (HumidDry::None, COLD_FALL),
         summer: (Dry, COLD_SUMMER),
         diurnal_range: CONTINENTAL_POLAR_TEMP_RANGE
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct GenData {
     pub index: (i32, i32, i32),
     pub temperature: Vec<OrderedFloat<f64>>,
@@ -435,7 +435,7 @@ impl GenData {
     ) -> (f32, f32) {
         let mut td: f32 = 0.0;
 
-        td = temperature - (factor);
+        td = (temperature - (factor.abs()));
 
         // if is_prec {
         //     td = tdprev;
@@ -451,54 +451,40 @@ impl GenData {
     }
 
     #[deny(clippy::eq_op)]
-    fn seasonal_factor(latitude: i32, season: Season, climate: &Climate) -> f32 {
-
-        let season_factor: f32 = match (season, latitude) {
-            // COGER RANDOM DEL RANGO ENTRE 0 Y EL MODIFICADOR Y ESO ES LO QUE SE RESTA, CUANTO MAS SE RESTA MENOS HUMEDAD
-            // EQUATOR
-            (Season::Summer, 0..=25) => 5.0,
-            (Season::Winter, 0..=25) => 5.0,
-            (Season::Fall, 0..=25) => 5.0,
-            (Season::Spring, 0..=25) => 5.0,
-            // TEMPERATE
-            (Season::Summer, 25..=55) => 25.0,
-            (Season::Winter, 25..=55) => 10.0,
-            (Season::Fall, 25..=55) => 13.0,
-            (Season::Spring, 25..=55) => 15.0,
-
-            // SUB-POLAR (HUMID)
-            (Season::Winter, 55..=90) => 6.0,
-            (Season::Summer, 55..=90) => 12.0,
-            (Season::Fall, 55..=90) => 7.0,
-            (Season::Spring, 55..=90) => 10.0,
-            // WILDCARD
-            (Season::Winter, _) => 0.0,
-            (Season::Summer, _) => 0.0,
-            (Season::Fall, _) => 0.0,
-            (Season::Spring, _) => 0.0,
-        };
-
-        let seasonal_factor_hum = match season {
-            Season::Fall => HumidDry::None,
-            Season::Spring => HumidDry::None,
-            Season::Summer => climate.summer.0,
-            Season::Winter => climate.winter.0
-        };
-
-        let range = match seasonal_factor_hum {
-            HumidDry::None => 0..season_factor as i32,
-            Dry => (season_factor * (5.5 / 6.0)) as i32..season_factor as i32,
-            Humid => 0..(season_factor * (2.0 / 6.0)) as i32
-        };
-
+    fn factor(season: Season, climate: &Climate, t: f64) -> f64 {
         let mut rng = thread_rng();
-        let mut r = rng.gen_range(range) as f32;
-        // r = match seasonal_factor_hum {
-        //     HumidDry::Dry => r * rng.gen_range(3.0..4.0),
-        //     HumidDry::Humid => r * 1.25,
-        //     HumidDry::None => r * 2.5
-        // };
-        r
+        let mut r: Range<f64>;
+        if season == Season::Summer {
+            r = match climate.summer.0 {
+                Humid => 0.0..(0.5 * t.abs()),
+                Dry => (0.75 * t)..t.abs(),
+                HumidDry::None => 0.0..t.abs()
+            };
+        } else if season == Season::Winter {
+            r = match climate.winter.0 {
+                Humid => 0.0..(0.5 * t.abs()),
+                Dry => (0.75 * t)..t.abs(),
+                HumidDry::None => 0.0..t.abs()
+            };
+        } else if season == Season::Fall {
+            r = match climate.fall.0 {
+                Humid => 0.0..(0.5 * t.abs()),
+                Dry => (0.75 * t)..t.abs(),
+                HumidDry::None => 0.0..t.abs()
+            };
+        } else if season == Season::Spring {
+            r = match climate.spring.0 {
+                Humid => 0.0..(0.5 * t.abs()),
+                Dry => (0.75 * t)..t.abs(),
+                HumidDry::None => 0.0..t.abs()
+            };
+        }
+        else {
+            r = (0.70 * t)..t.abs();
+        }
+
+        rng.gen_range(r)
+
     }
 
 
@@ -548,8 +534,8 @@ impl GenData {
             }
 
             let base_temp_range = match current_season {
-                Season::Fall => climate.fall.clone(),
-                Season::Spring => climate.spring.clone(),
+                Season::Fall => climate.fall.1.clone(),
+                Season::Spring => climate.spring.1.clone(),
                 Season::Summer => climate.summer.1.clone(),
                 Season::Winter => climate.winter.1.clone()
             };
@@ -600,13 +586,15 @@ impl GenData {
                 wind_vec.push(wind);
             }
 
-            let seasonal_factor = Self::seasonal_factor(latitude, current_season, &climate);
+
 
             for hour in 1..=24 {
+                let t = temperature_vec.get((hour * day) - 1).unwrap().0;
+                let factor = Self::factor(current_season.clone(), &climate, t.clone());
                 // let water = altitude <= -0.6;
                 let rel = Self::calculate_rel_hum(
-                    temperature_vec.get((hour * day) - 1).unwrap().0 as f32,
-                    seasonal_factor,
+                    t.clone() as f32,
+                    factor as f32,
                 );
                 hum_vec.push(OrderedFloat(rel.0 as f64));
                 td_vec.push(rel.1 as f64);
