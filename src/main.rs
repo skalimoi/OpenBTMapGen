@@ -4,7 +4,7 @@ use image_crate::imageops::FilterType;
 use map_range::MapRange;
 use fltk::image::{Image, RgbImage, SharedImage};
 use fltk::{prelude::*, *};
-use image_crate::{ImageBuffer, Luma, Pixel, DynamicImage};
+use image_crate::{ImageBuffer, Luma, Pixel, DynamicImage, EncodableLayout, Rgb, Rgba};
 use noise::utils::{ImageRenderer, NoiseMap, NoiseMapBuilder, PlaneMapBuilder};
 use noise::{Billow, Curve, Fbm, MultiFractal, Perlin, Seedable, Simplex};
 use rand::{thread_rng, Rng};
@@ -142,7 +142,7 @@ fn menu_do(w: &mut impl MenuExt, sender: &Sender<Message>) {
 }
 
 fn new_do(program_data: &mut FileData) {
-    let clean = FileData {
+    let mut clean = FileData {
         topography: TopoSettings {
             seed: None,
             noise_type: None,
@@ -171,6 +171,15 @@ fn new_do(program_data: &mut FileData) {
         weather_data: vec![],
         discharge: vec![],
     };
+    clean.raw_map_512.fill(0);
+    clean.color_map_512.fill(0);
+    clean.eroded_raw_512.fill(0);
+    clean.color_eroded_512.fill(0);
+    clean.raw_full.fill(0);
+    clean.eroded_full_color.fill(0);
+    clean.eroded_full.fill(0);
+    clean.discharge.fill(0);
+        
     let _ = replace::<FileData>(program_data, clean);
 }
 
@@ -189,11 +198,12 @@ fn save_file_do(program_data: &mut FileData, is_workplace: &mut bool, path: &mut
         nfc.set_option(dialog::FileDialogOptions::SaveAsConfirm);
         nfc.show();
         let dir = nfc.filename();
+        let final_name = dir.to_str().unwrap().to_string() + ".ron";
         if !dir.clone().to_str().unwrap().is_empty() {
             let s = ron::ser::to_string(&program_data).expect("Error serializing file data.");
-            fs::write(dir.clone(), s).expect("Unable to write file.");
+            fs::write(final_name.as_str(), s).expect("Unable to write file.");
             let _ = replace::<bool>(is_workplace, true);
-            let p = dir.into_os_string().into_string().unwrap();
+            let p = final_name.clone();
             let _ = replace::<String>(path, p);
         }
     }
@@ -234,13 +244,14 @@ fn open_file_do(program_data: &mut FileData) -> (FileData, PathBuf) {
     let dir = nfc.filename();
     if !dir.clone().into_os_string().is_empty() {
         let f = File::open(dir.clone()).expect("Error opening file.");
-        let mut data: FileData = match from_reader(f) {
+        let mut data_n: FileData = match from_reader(f) {
             Ok(x) => x,
             Err(e) => {
                 println!("Failed to load file: {}", e);
                 std::process::exit(1);
             }
         };
+        data = data_n;
     }
     (data, dir)
 }
@@ -831,9 +842,9 @@ fn update_simplex_noise(dimensions: usize, data: &mut FileData) {
 /// 1 => preview_erosion_topo (512 eroded)
 /// 2 => hydro_preview (8192 eroded)
 /// 3 => hydro_mask_preview (8192 water mask)
-fn update_noise_img(w: &mut impl WidgetExt, data: &mut FileData, img_type: u8) {
+fn update_noise_img(w: &mut impl WidgetExt, data: &FileData, img_type: u8) {
     let map = match img_type {
-        0 => image::RgbImage::new(data.color_map_512.as_slice(), 512, 512, ColorDepth::Rgba8).unwrap(),
+        0 => { image::RgbImage::new(data.color_map_512.as_slice(), 512, 512, ColorDepth::Rgba8).unwrap() },
         1 => image::RgbImage::new(data.color_eroded_512.as_slice(), 512, 512, ColorDepth::Rgba8).unwrap(),
         _ => RgbImage::new(&[], 512, 512, ColorDepth::Rgba8).unwrap()
     };
@@ -1545,8 +1556,6 @@ fn main() {
                 }
                 Message::SaveFile => {
                     save_file_do(&mut file, &mut is_file_workspace, &mut workspace_path, &mut file_name);
-                    // TODO CAMBIAR PATH DENTRO DE LA FN PORQ SI NO PETA
-                    println!("{workspace_path}");
                 }
                 Message::SaveFileAs => {
                     save_file_do(&mut file, &mut false, &mut workspace_path, &mut file_name);
@@ -1558,16 +1567,38 @@ fn main() {
                     let _ = replace::<bool>(&mut is_file_workspace, false);
                 }
                 Message::OpenFile => {
-                    let p = open_file_do(&mut file);
+                    let mut p = open_file_do(&mut file);
+                    ui.main_window.set_label(format!("OpenBattlesim - {:?}", p.1).as_str());
                     let s = p.1.to_str().unwrap().to_string();
                     workspace_path = s;
                     let _ = replace::<bool>(&mut is_file_workspace, true);
-                    let _ = replace::<FileData>(&mut file, p.0); // TODO VERY IMPORTANT
-                    // TODO THIS SEEMS TO BE THE PROBLEM, FILE DATA ISN'T REPLACED SUCCESSFULLY. LOOK INTO IT
-                    update_noise_img(&mut ui.preview_box_topo, &mut file, 0);
-                    update_noise_img(&mut ui.preview_erosion_topo, &mut file, 1);
-                    update_hydro_prev(&mut ui.hydro_preview, true, &mut file);
-                    update_hydro_prev(&mut ui.hydro_mask_preview, false, &mut file);
+
+                    // test
+                    file.topography = p.0.topography;
+                    file.weather = p.0.weather;
+                    file.weather_data = p.0.weather_data;
+                    file.discharge = p.0.discharge;
+                    file.eroded_full = p.0.eroded_full;
+                    file.eroded_full_color = p.0.eroded_full_color;
+                    file.raw_full = p.0.raw_full;
+                    file.color_eroded_512 = p.0.color_eroded_512;
+                    file.eroded_raw_512 = p.0.eroded_raw_512;
+                    file.color_map_512 = p.0.color_map_512.clone();
+                    file.raw_map_512 = p.0.raw_map_512;
+                    
+                    if !file.color_map_512.is_empty() {
+                        update_noise_img(&mut ui.preview_box_topo, &file, 0);
+                    }
+                    if !file.color_eroded_512.is_empty() {
+                        update_noise_img(&mut ui.preview_erosion_topo, &file, 1);
+                    }
+                    if !file.eroded_full_color.is_empty() {
+                        update_hydro_prev(&mut ui.hydro_preview, true, &mut file);
+                    }
+                    if !file.discharge.is_empty() {
+                        update_hydro_prev(&mut ui.hydro_mask_preview, false, &mut file);
+                    }
+                    
 
                     ui.seed_input.set_value(format!("{}", &file.topography.seed.unwrap().clone()).as_str());
                     ui.noise_octaves_input.set_value(format!("{}", &file.topography.noise_octaves.unwrap().clone()).as_str());
