@@ -44,6 +44,28 @@ mod weather_settings;
 const DIMENSIONS: usize = 512;
 const PREV_DIMENSIONS: usize = 512;
 
+const DEFAULT_TOPOSETTINGS: TopoSettings =  TopoSettings {
+seed: Some(42949),
+noise_type: Some(NoiseTypesUi::BillowPerlin),
+noise_octaves: Some(20),
+noise_frequency: Some(3.0),
+noise_lacunarity: Some(4.0),
+mountain_pct: 25.0,
+sea_pct: 5.0,
+min_height: -50,
+max_height: 1000,
+erosion_cycles: 0,
+};
+
+const DEFAULT_WEATHERSETTINGS: WeatherSettings = WeatherSettings {
+seed: None,
+koppen: None,
+latitude: 0,
+grid_size: 16,
+};
+
+
+
 #[derive(Clone, Serialize, Deserialize, Debug)]
 struct FileData {
     topography: TopoSettings,
@@ -102,6 +124,7 @@ enum Message {
     SaveFile,
     SaveFileAs,
     NewScenario,
+    ExportMap,
 }
 
 struct ViewState {
@@ -139,28 +162,19 @@ fn menu_do(w: &mut impl MenuExt, sender: &Sender<Message>) {
         *sender,
         Message::SaveFileAs
     );
+    w.add_emit(
+        "&File/Export map...\t",
+        Shortcut::Ctrl | 'e',
+        menu::MenuFlag::Normal,
+        *sender,
+        Message::ExportMap
+    );
 }
 
 fn new_do(program_data: &mut FileData) {
-    let mut clean = FileData {
-        topography: TopoSettings {
-            seed: None,
-            noise_type: None,
-            noise_octaves: None,
-            noise_frequency: None,
-            noise_lacunarity: None,
-            mountain_pct: 0.0,
-            sea_pct: 0.0,
-            min_height: 0,
-            max_height: 0,
-            erosion_cycles: 0,
-        },
-        weather: WeatherSettings {
-            seed: None,
-            koppen: None,
-            latitude: 0,
-            grid_size: 0,
-        },
+    let clean = FileData {
+        topography: DEFAULT_TOPOSETTINGS,
+        weather: DEFAULT_WEATHERSETTINGS,
         raw_map_512: vec![],
         color_map_512: vec![],
         eroded_raw_512: vec![],
@@ -171,14 +185,6 @@ fn new_do(program_data: &mut FileData) {
         weather_data: vec![],
         discharge: vec![],
     };
-    clean.raw_map_512.fill(0);
-    clean.color_map_512.fill(0);
-    clean.eroded_raw_512.fill(0);
-    clean.color_eroded_512.fill(0);
-    clean.raw_full.fill(0);
-    clean.eroded_full_color.fill(0);
-    clean.eroded_full.fill(0);
-    clean.discharge.fill(0);
         
     let _ = replace::<FileData>(program_data, clean);
 }
@@ -187,7 +193,27 @@ fn set_data(loaded_data: &mut FileData, data: &mut FileData) {
     let _ = swap::<FileData>(data, &mut loaded_data.clone());
 }
 
-// TODO poner nombre del escenario en window
+fn export_do(program_data: &mut FileData) {
+    let mut nfc = dialog::NativeFileChooser::new(dialog::NativeFileChooserType::BrowseSaveDir);
+    nfc.set_option(FileDialogOptions::SaveAsConfirm);
+    nfc.show();
+    let dir = nfc.filename();
+    let dir_string = dir.to_str().unwrap().to_string();
+    println!("{}", dir_string.clone());
+    fs::create_dir(dir_string.clone() + "/terrain/").expect("Error creating terrain directory.");
+    fs::create_dir(dir_string.clone() + "/weather/").expect("Error creating weather directory.");
+    fs::create_dir(dir_string.clone() + "/textures/").expect("Error creating textures directory.");
+    
+    // TODO: check for empty vecs and throw error
+    // TODO: lossless rgb saving for texture creation when?
+    let s = ron::ser::to_string(&program_data.weather_data).expect("Error serializing weather data.");
+    fs::write(dir_string.clone() + "/weather/forecast.ron", s).expect("Error writing weather data.");
+    let i: ImageBuffer<Luma<u16>, Vec<u16>> = image_crate::ImageBuffer::from_raw(8192, 8192, program_data.eroded_full.clone()).unwrap();
+    i.save(dir_string.clone() + "/terrain/map.png").unwrap();
+    let d: ImageBuffer<Luma<u8>, Vec<u8>> = image_crate::ImageBuffer::from_raw(8192, 8192, program_data.discharge.clone()).unwrap();
+    d.save(dir_string.clone() + "/terrain/hydro.png").unwrap();
+}
+
 fn save_file_do(program_data: &mut FileData, is_workplace: &mut bool, path: &mut String, filename: &mut String) {
     if *is_workplace {
         let s = ron::ser::to_string(&program_data).expect("Error serializing file data.");
@@ -430,6 +456,7 @@ fn erode_heightmap_full(file: &mut FileData) {
     let img: ImageBuffer<Luma<u16>, Vec<u16>> = ImageBuffer::from_raw(512, 512, file.clone().raw_map_512).unwrap();
 
     let heightmap = img.into_raw();
+    
     let mut erosion_world_1 = World::new(
         heightmap,
         512,
@@ -473,8 +500,14 @@ fn erode_heightmap_full(file: &mut FileData) {
     
     let resampled_vec_1024 = image_crate::imageops::resize(&buffer, 1024, 1024, FilterType::Lanczos3).into_raw();
     
+    let b: ImageBuffer<Luma<u16>, Vec<u16>> = ImageBuffer::from_raw(1024, 1024, resampled_vec_1024).unwrap();
+
+    //CHECK IF IT WORKS TODO 
+    
+    let i = imageproc::noise::gaussian_noise(&b, 1.5, 0.5, 284732);
+    
     let mut erosion_world_2 = World::new(
-        resampled_vec_1024,
+        i.to_vec(),
         1024,
         1024,
         file.topography.seed.unwrap() as i16,
@@ -510,9 +543,15 @@ fn erode_heightmap_full(file: &mut FileData) {
         ImageBuffer::from_raw(1024, 1024, eroded_preview_to_be_2048).unwrap();
     
     let resampled_vec_2048 = image_crate::imageops::resize(&buffer, 2048, 2048, FilterType::Lanczos3).into_raw();
+
+    //CHECK IF IT WORKS TODO 
+
+    let b: ImageBuffer<Luma<u16>, Vec<u16>> = ImageBuffer::from_raw(2048, 2048, resampled_vec_2048).unwrap();
+
+    let i = imageproc::noise::gaussian_noise(&b, 1.5, 0.5, 284732);
     
     let mut erosion_world_3 = World::new(
-        resampled_vec_2048,
+        i.to_vec(),
         2048,
         2048,
         file.topography.seed.unwrap() as i16,
@@ -624,8 +663,6 @@ fn erode_heightmap_full(file: &mut FileData) {
         .iter()
         .map(|x| (x.height * 255.0) as u16)
         .collect();
-    let buffer: ImageBuffer<Luma<u16>, Vec<u16>> =
-        ImageBuffer::from_raw(8192, 8192, eroded_preview.clone()).unwrap();
 
     file.eroded_full = eroded_preview.clone();
 
@@ -1143,8 +1180,8 @@ fn main() {
     };
 
     let mut weather_settings: WeatherSettings = WeatherSettings {
-        seed: None,
-        koppen: None,
+        seed: Some(100000),
+        koppen: Some(koppen_cfa()),
         latitude: 0,
         grid_size: 16,
     };
@@ -1187,6 +1224,8 @@ fn main() {
     let app = app::App::default();
     let mut ui = ui::UserInterface::make_window();
     let mut win = ui.main_window.clone();
+    let win_icon = image::PngImage::load("icons/win.png").unwrap();
+    win.set_icon(Some(win_icon));
     let (x, y, w, h) = (ui.weather_preview.x(), ui.weather_preview.y(), ui.weather_preview.w(), ui.weather_preview.h());
     // create gl window
     let mut gl_widget = GlutWindow::new(x, y, w, h, None);
@@ -1384,6 +1423,7 @@ fn main() {
     while app.wait() {
         if let Some(msg) = r.recv() {
             match msg {
+                Message::ExportMap => { export_do(&mut file) }
                 Message::MinHeightInput => { topo_settings.min_height = ui.min_height_input.value() as i32 }
                 Message::MaxHeightInput => { topo_settings.max_height = ui.max_height_input.value() as i32 }
                 Message::SimplexChoice => {
@@ -1556,6 +1596,7 @@ fn main() {
                 }
                 Message::SaveFile => {
                     save_file_do(&mut file, &mut is_file_workspace, &mut workspace_path, &mut file_name);
+                    ui.main_window.set_label(format!("OpenBattlesim Map Generator - {}", workspace_path).as_str());
                 }
                 Message::SaveFileAs => {
                     save_file_do(&mut file, &mut false, &mut workspace_path, &mut file_name);
@@ -1563,14 +1604,14 @@ fn main() {
                 }
                 Message::NewScenario => {
                     new_do(&mut file);
-                    println!("{workspace_path}");
+                    ui.main_window.set_label("OpenBattlesim Map Generator - Untitled scenario");
                     let _ = replace::<bool>(&mut is_file_workspace, false);
                 }
                 Message::OpenFile => {
                     let mut p = open_file_do(&mut file);
-                    ui.main_window.set_label(format!("OpenBattlesim - {:?}", p.1).as_str());
                     let s = p.1.to_str().unwrap().to_string();
                     workspace_path = s;
+                    ui.main_window.set_label(format!("OpenBattlesim Map Generator - {}", workspace_path).as_str());
                     let _ = replace::<bool>(&mut is_file_workspace, true);
 
                     // test
@@ -1601,18 +1642,27 @@ fn main() {
                     
 
                     ui.seed_input.set_value(format!("{}", &file.topography.seed.unwrap().clone()).as_str());
+                    ui.seed_input.redraw();
                     ui.noise_octaves_input.set_value(format!("{}", &file.topography.noise_octaves.unwrap().clone()).as_str());
+                    ui.noise_octaves_input.redraw();
                     ui.noise_freq_input.set_value(format!("{}", &file.topography.noise_frequency.unwrap().clone()).as_str());
+                    ui.noise_freq_input.redraw();
                     ui.noise_lacunarity_input.set_value(format!("{}", &file.topography.noise_lacunarity.unwrap().clone()).as_str());
+                    ui.noise_lacunarity_input.redraw();
                     ui.min_height_input.set_value(file.topography.min_height.clone() as f64);
+                    ui.min_height_input.redraw();
                     ui.max_height_input.set_value(file.topography.max_height.clone() as f64);
+                    ui.max_height_input.redraw();
                     match &file.topography.noise_type.clone().unwrap() {
                         NoiseTypesUi::Simplex => ui.noise_choice.set_value(0),
                         NoiseTypesUi::Perlin => ui.noise_choice.set_value(1),
                         NoiseTypesUi::BillowPerlin => ui.noise_choice.set_value(2)
                     };
+                    ui.noise_choice.redraw();
                     ui.erosion_cycles_input.set_value(file.topography.erosion_cycles.clone() as f64);
+                    ui.erosion_cycles_input.redraw();
                     ui.weather_seed_input.set_value(format!("{}", &file.weather.seed.unwrap().clone()).as_str());
+                    ui.weather_seed_input.redraw();
                     for choice in ui.weather_type.clone().into_iter() {
                         if choice.label().unwrap().to_string() == file.clone().weather.koppen.unwrap().name {
                             ui.weather_type.set_item(&choice);
@@ -1621,8 +1671,27 @@ fn main() {
                             continue
                         }
                     }
+                    ui.weather_type.redraw();
                     ui.latitude_input.set_value(format!("{}", &file.weather.latitude.clone()).as_str());
+                    ui.latitude_input.redraw();
                     ui.grid_size_input.set_value(format!("{}", &file.weather.grid_size.clone()).as_str());
+                    ui.grid_size_input.redraw();
+
+                    let map: ImageBuffer<Luma<u16>, Vec<u16>> = ImageBuffer::from_raw(512, 512, file.eroded_raw_512.clone()).unwrap();
+                    let map_b = map.clone();
+                    let terrain_map = Terrain::new(
+                        &context,
+                        terrain_material.clone(),
+                        Arc::new(
+                            move |x, y| {
+                                map_b.clone().get_pixel(x as u32, y as u32).channels().first().unwrap().clone() as f32 * 0.01
+                            }
+                        ),
+                        512.0,
+                        1.0,
+                        three_d::prelude::Vec2::new(255.0, 255.0)
+                    );
+                    terrain = terrain_map;
                 }
             }
         }

@@ -8,31 +8,31 @@ class UserInterface {open
   } {
     Fl_Window main_window {
       label {OpenBattlesim Map Generator} open
-      xywh {392 262 870 579} type Single visible
+      xywh {392 262 870 579} type Single color 55 visible
     } {
-      Fl_Menu_Bar menu_bar {open selected
-        xywh {-1 0 870 30}
+      Fl_Menu_Bar menu_bar {open
+        xywh {-1 0 870 30} color 55
       } {}
-      Fl_Tabs {} {open
-        xywh {-3 29 898 567}
+      Fl_Tabs {} {open selected
+        xywh {-3 29 898 567} color 7 selection_color 55
       } {
         Fl_Group topography_pane {
           label Topography open
-          xywh {0 55 870 525} hide
+          xywh {0 55 870 525} color 7
         } {
           Fl_Group first_group {open
-            xywh {0 60 760 520} box BORDER_BOX
+            xywh {0 60 760 520} box BORDER_BOX color 55
           } {}
           Fl_Group topo_menu_box {open
-            xywh {585 55 285 525} box FLAT_BOX align 192
+            xywh {585 55 285 525} box FLAT_BOX color 55 align 192
           } {
             Fl_Input seed_input {
               label {Seed:}
-              xywh {630 56 165 24}
+              xywh {630 56 165 24} color 55
             }
             Fl_Button seed_random_button {
               label Random
-              xywh {800 55 64 25} box GTK_UP_BOX down_box GTK_DOWN_BOX
+              xywh {800 55 64 25} box GTK_UP_BOX down_box GTK_DOWN_BOX color 55
             }
             Fl_Button erode_terrain_button {
               label {Erode terrain}
@@ -40,11 +40,11 @@ class UserInterface {open
             }
           }
           Fl_Group noise_opts_group {open
-            xywh {595 95 265 175} box BORDER_FRAME color 37
+            xywh {595 95 265 175} box BORDER_FRAME color 35
           } {
             Fl_Choice noise_choice {
               label {Noise type:} open
-              xywh {719 120 95 25} down_box BORDER_BOX
+              xywh {719 120 95 25} down_box BORDER_BOX color 55
             } {}
             Fl_Input noise_octaves_input {
               label {Octaves:}
@@ -61,18 +61,18 @@ class UserInterface {open
           }
           Fl_Box {} {
             label {Noise settings}
-            xywh {596 85 110 25} box FLAT_BOX
+            xywh {596 85 110 25} box FLAT_BOX color 7
           }
           Fl_Group terrain_settings_box {open
             xywh {595 285 265 170} box BORDER_FRAME color 37
           } {
             Fl_Value_Slider high_elev_slider {
               label {Mountain %}
-              xywh {615 315 225 20} type {Horz Knob} box THIN_DOWN_BOX align 1 maximum 100 step 1 textsize 14
+              xywh {615 315 225 20} type {Horz Knob} box THIN_DOWN_BOX color 7 align 1 maximum 100 step 1 textsize 14
             }
             Fl_Value_Slider sea_elev_slider {
               label {Sea level %}
-              xywh {615 356 225 21} type {Horz Knob} box THIN_DOWN_BOX align 1 maximum 100 step 1 textsize 14
+              xywh {615 356 225 21} type {Horz Knob} box THIN_DOWN_BOX color 7 align 1 maximum 100 step 1 textsize 14
             }
             Fl_Value_Input min_height_input {
               label {Minimum height (m)}
@@ -85,7 +85,7 @@ class UserInterface {open
           }
           Fl_Box {} {
             label {Terrain settings}
-            xywh {596 271 110 25} box FLAT_BOX
+            xywh {596 271 110 25} box FLAT_BOX color 7
           }
           Fl_Group erosion_opts_box {open
             xywh {595 465 265 55} box BORDER_FRAME color 37
@@ -97,7 +97,7 @@ class UserInterface {open
           }
           Fl_Box {} {
             label {Erosion settings}
-            xywh {595 455 110 25} box FLAT_BOX
+            xywh {595 455 110 25} box FLAT_BOX color 7
           }
           Fl_Group topo_preview {
             label {Original Preview} open
@@ -116,10 +116,10 @@ class UserInterface {open
         }
         Fl_Group hydrography_pane {
           label Hydrography open
-          xywh {0 60 895 520}
+          xywh {0 60 895 520} hide
         } {
           Fl_Group {} {open
-            xywh {0 60 870 520} box BORDER_BOX
+            xywh {0 60 870 520} box BORDER_BOX color 55
           } {
             Fl_Text_Display {} {
               xywh {18 532 832 33} box BORDER_FRAME color 39 selection_color 247
@@ -151,7 +151,7 @@ class UserInterface {open
           xywh {0 60 870 520} hide
         } {
           Fl_Group {} {open
-            xywh {0 60 870 520} box BORDER_BOX
+            xywh {0 60 870 520} box BORDER_BOX color 7
           } {
             Fl_Group weather_preview {
               label {Grid Preview} open
@@ -163,7 +163,7 @@ class UserInterface {open
               }
             }
             Fl_Group {} {open
-              xywh {500 60 370 520} box FLAT_BOX align 192
+              xywh {500 60 370 520} box FLAT_BOX color 7 align 192
             } {
               Fl_Input weather_seed_input {
                 label {Seed:}
@@ -178,12 +178,12 @@ class UserInterface {open
               } {
                 Fl_Value_Slider layer_slider {
                   label {Layer:}
-                  xywh {630 126 190 25} type {Horz Knob} align 4 maximum 6 step 1
+                  xywh {630 126 190 25} type {Horz Knob} color 7 align 4 maximum 6 step 1
                 }
               }
               Fl_Box {} {
                 label {Layer view}
-                xywh {571 90 110 25} box FLAT_BOX
+                xywh {571 90 110 25} box FLAT_BOX color 7
               }
               Fl_Group {} {open
                 xywh {570 233 265 136} box BORDER_FRAME color 37
@@ -203,7 +203,7 @@ class UserInterface {open
               }
               Fl_Box {} {
                 label {Climate settings}
-                xywh {571 223 110 25} box FLAT_BOX
+                xywh {571 223 110 25} box FLAT_BOX color 7
               }
               Fl_Button generate_weather_button {
                 label {Generate weather grid}
@@ -217,32 +217,32 @@ class UserInterface {open
               xywh {503 377 35 79}
             }
             Fl_Button turn_right_vis {
-              xywh {503 107 35 35}
+              xywh {503 107 35 35} color 7
             }
             Fl_Button turn_left_vis {
-              xywh {503 153 35 35}
+              xywh {503 153 35 35} color 7
             }
             Fl_Button temperature_mode {
-              xywh {503 198 35 35}
+              xywh {503 198 35 35} color 7
             }
             Fl_Button humidity_mode {
-              xywh {503 243 35 35}
+              xywh {503 243 35 35} color 7
             }
             Fl_Button pressure_mode {
-              xywh {503 288 35 35}
+              xywh {503 288 35 35} color 7
             }
             Fl_Button wind_mode {
-              xywh {503 333 35 35}
+              xywh {503 333 35 35} color 7
             }
             Fl_Value_Slider day_vis_slider {
               label {Day visualization:}
-              xywh {570 197 265 21} type Horizontal align 1 minimum 1 maximum 360 step 1 textsize 14
+              xywh {570 197 265 21} type Horizontal color 7 align 1 minimum 1 maximum 360 step 1 textsize 14
             }
           }
         }
         Fl_Group misc_pane {
           label Misc open
-          xywh {0 60 870 520} hide
+          xywh {0 60 870 520} color 7 hide
         } {}
       }
     }
