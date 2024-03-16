@@ -3,22 +3,24 @@ use fltk::app::Sender;
 use map_range::MapRange;
 use fltk::image::SharedImage;
 use fltk::{*, prelude::*};
-use image_crate::{DynamicImage, EncodableLayout, ImageBuffer, Luma, Pixel};
+use image_crate::{DynamicImage, EncodableLayout, GenericImageView, ImageBuffer, Luma, Pixel};
 use noise::utils::NoiseMapBuilder;
 use noise::{Fbm, MultiFractal, Perlin, Seedable};
 use rand::{Rng, thread_rng};
 
 use std::sync::Arc;
-use fltk::window::GlutWindow;
+use fltk::window::{GlutWindow, Window};
 use three_d::{AmbientLight, Camera, ClearState, ColorMaterial, Context, CpuMaterial, CpuMesh, CpuTexture, Cull, DirectionalLight, FromCpuMaterial, Gm, LightingModel, Mat4, Mesh, PhysicalMaterial, RenderTarget, Srgba, Terrain, Vec3, Viewport};
 use std::default::Default;
 use std::fs::File;
 use std::fs;
 use std::mem::{replace, swap};
 use std::path::PathBuf;
+use fastlem::core::units::Elevation;
 
 use fltk::dialog::FileDialogOptions;
-use fltk::enums::Shortcut;
+use fltk::enums::{ColorDepth, Event, Shortcut};
+use image_crate::imageops::FilterType;
 use ron::de::from_reader;
 use serde::{Deserialize, Serialize};
 
@@ -26,6 +28,9 @@ use serde::{Deserialize, Serialize};
 use topo_settings::NoiseTypesUi;
 use topography::{DEFAULT_TOPOSETTINGS, DIMENSIONS};
 use weather_pane::DEFAULT_WEATHERSETTINGS;
+use crate::fastlem_opt::generate_terrain;
+use crate::topography::{max_bounds_do, min_bounds_do, lod_do, erod_scale_do, apply_color_eroded, apply_color};
+use crate::ui::HeightmapInterface;
 use crate::utils::get_height;
 use crate::weather::{Climate, GenData, koppen_afam, koppen_as, koppen_aw, koppen_bsh, koppen_bsk, koppen_bwh, koppen_bwk, koppen_cfa, koppen_cfb, koppen_cfc, koppen_cwa, koppen_cwb, koppen_cwc, koppen_dfa, koppen_dfb, koppen_dfc, koppen_dsc, koppen_et};
 use crate::weather_settings::WeatherSettings;
@@ -40,6 +45,7 @@ mod weather_settings;
 mod topography;
 mod hydro;
 mod weather_pane;
+mod fastlem_opt;
 
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -65,21 +71,22 @@ enum WeatherVisualization {
     Humidity,
     Init
 }
+
 #[derive(Copy, Clone)]
 enum Message {
-    PerlinChoice,
-    BillowChoice,
-    SimplexChoice,
+    BrowseFile,
+    ImportButton,
+    FileBox,
     SeedInput,
-    SeedRandom,
-    OctaveInput,
-    LacInput,
-    FreqInput,
+    MinBounds,
+    MaxBounds,
+    Lod,
+    ErodScale,
     MtnSlider,
     SeaSlider,
+    SeedRandom,
     CycleInput,
     ErodeButton,
-    FullPreview,
     TurnViewRight,
     TurnViewLeft,
     GenWeather,
@@ -101,6 +108,9 @@ enum Message {
     SaveFileAs,
     NewScenario,
     ExportMap,
+    ImportHeightmap,
+    FullPreviewIncremental,
+    FullPreviewSingular,
 }
 
 struct ViewState {
@@ -145,6 +155,17 @@ fn menu_do(w: &mut impl MenuExt, sender: &Sender<Message>) {
         *sender,
         Message::ExportMap
     );
+    w.add_emit(
+        "&Edit/Import heightmap...\t",
+        Shortcut::Ctrl | 'h',
+        menu::MenuFlag::Normal,
+        *sender,
+        Message::ImportHeightmap
+    );
+}
+
+fn heightmap_browse_button_do(program_data: &mut FileData) {
+
 }
 
 fn new_do(program_data: &mut FileData) {
@@ -179,7 +200,6 @@ fn export_do(program_data: &mut FileData) {
     fs::create_dir(dir_string.clone() + "/terrain/").expect("Error creating terrain directory.");
     fs::create_dir(dir_string.clone() + "/weather/").expect("Error creating weather directory.");
     fs::create_dir(dir_string.clone() + "/textures/").expect("Error creating textures directory.");
-    
     // TODO: check for empty vecs and throw error
     // TODO: lossless rgb saving for texture creation when?
     let s = ron::ser::to_string(&program_data.weather_data).expect("Error serializing weather data.");
@@ -213,11 +233,12 @@ fn save_file_do(program_data: &mut FileData, is_workplace: &mut bool, path: &mut
 fn open_file_do(program_data: &mut FileData) -> (FileData, PathBuf) {
     let mut data: FileData = FileData {
         topography: TopoSettings {
+            max_alt: 0.0,
             seed: None,
-            noise_type: None,
-            noise_octaves: None,
-            noise_frequency: None,
-            noise_lacunarity: None,
+            min_bound: (0.0, 0.0),
+            max_bound: (0.0, 0.0),
+            lod: 0.0,
+            erod_scale: 0.0,
             mountain_pct: 0.0,
             sea_pct: 0.0,
             min_height: 0,
@@ -261,19 +282,6 @@ fn open_file_do(program_data: &mut FileData) -> (FileData, PathBuf) {
 fn seed_input_do(w: &mut impl InputExt, data: &mut FileData) {
     if w.changed() {
         data.topography.set_seed(Some(w.value().parse().unwrap()));
-
-        match data.topography.noise_type {
-            Some(NoiseTypesUi::Simplex) => {
-                topography::update_simplex_noise(DIMENSIONS, data);
-            }
-            Some(NoiseTypesUi::Perlin) => {
-                topography::update_perlin_noise(data, DIMENSIONS);
-            }
-            Some(NoiseTypesUi::BillowPerlin) => {
-                topography::update_billow_noise(DIMENSIONS, data);
-            }
-            _ => {}
-        };
     }
 }
 
@@ -287,40 +295,10 @@ fn seed_random_do(
     seed_box.set_value(&format!("{}", seed));
     data.topography.set_seed(Some(seed));
 
-    match data.topography.noise_type {
-        Some(NoiseTypesUi::Simplex) => {
-            topography::update_simplex_noise(DIMENSIONS, data);
-        }
-        Some(NoiseTypesUi::Perlin) => {
-            topography::update_perlin_noise(data, DIMENSIONS);
-        }
-        Some(NoiseTypesUi::BillowPerlin) => {
-            topography::update_billow_noise(DIMENSIONS, data);
-        }
-        _ => {}
-    };
-}
-
-fn aux_choice_do(data: &mut FileData) {
-    match data.topography.noise_type.unwrap() {
-        NoiseTypesUi::Perlin => {
-            data.topography.set_type(Some(NoiseTypesUi::Perlin));
-            topography::update_perlin_noise(data, DIMENSIONS);
-        }
-        NoiseTypesUi::Simplex => {
-            data.topography.set_type(Some(NoiseTypesUi::Simplex));
-            topography::update_simplex_noise(DIMENSIONS, data);
-        }
-        NoiseTypesUi::BillowPerlin => {
-            data.topography.set_type(Some(NoiseTypesUi::BillowPerlin));
-            topography::update_billow_noise(DIMENSIONS, data);
-        }
-    }
 }
 
 
 fn main() {
-
     let (mut is_file_workspace, mut workspace_path, mut file_name) = (false, "".to_string(), "".to_string());
 
     let mut view_state = ViewState {
@@ -334,13 +312,14 @@ fn main() {
     let mut grid: Vec<GenData> = vec![];
 
     let mut topo_settings: TopoSettings = TopoSettings {
+        max_alt: 0.0,
         seed: Some(42949),
-        noise_type: Some(NoiseTypesUi::BillowPerlin),
-        noise_octaves: Some(20),
-        noise_frequency: Some(3.0),
-        noise_lacunarity: Some(4.0),
+        min_bound: (0.0, 0.0),
+        max_bound: (100.0, 100.0),
+        lod: 4.0,
+        erod_scale: 75.0,
         mountain_pct: 25.0,
-        sea_pct: 5.0,
+        sea_pct: 0.035,
         min_height: -50,
         max_height: 1000,
         erosion_cycles: 0,
@@ -392,7 +371,7 @@ fn main() {
     let mut ui = ui::UserInterface::make_window();
     let mut win = ui.main_window.clone();
     let win_icon = image::PngImage::load("icons/win.png").unwrap();
-    win.set_icon(Some(win_icon));
+    win.set_icon(Some(win_icon.clone()));
     let (x, y, w, h) = (ui.weather_preview.x(), ui.weather_preview.y(), ui.weather_preview.w(), ui.weather_preview.h());
     // create gl window
     let mut gl_widget = GlutWindow::new(x, y, w, h, None);
@@ -415,8 +394,8 @@ fn main() {
     /////////////
 
     let viewport = Viewport {
-        x: (0-x) + 30, // don't know why tf it must be like this in order for the viewport to be aligned with the widget
-        y: 0-y,
+        x: (0 - x) + 30, // don't know why tf it must be like this in order for the viewport to be aligned with the widget
+        y: 0 - y,
         width: w as u32,
         height: h as u32,
     };
@@ -502,15 +481,15 @@ fn main() {
                 let mut cube = Gm::new(
                     Mesh::new(&context, &CpuMesh::cube()),
                     ColorMaterial::from_cpu_material(&context,
-                        &CpuMaterial {
-                            albedo: Srgba {
-                                r: color.0,
-                                g: color.1,
-                                b: color.2,
-                                a: 10,
-                            },
-                            ..Default::default()
-                        },
+                                                     &CpuMaterial {
+                                                         albedo: Srgba {
+                                                             r: color.0,
+                                                             g: color.1,
+                                                             b: color.2,
+                                                             a: 10,
+                                                         },
+                                                         ..Default::default()
+                                                     },
                     )
                 );
                 cube.set_transformation(Mat4::from_translation(Vec3::new(32.0 * x as f32, 32.0 * (y + 6) as f32, 32.0 * z as f32)) * Mat4::from_scale(32.0));
@@ -541,25 +520,23 @@ fn main() {
 
     ui.seed_input.emit(s, Message::SeedInput);
 
-    topography::noise_choice_do(&mut ui.noise_choice, &s);
-
     menu_do(&mut ui.menu_bar, &s);
 
-    ui.noise_octaves_input.emit(s, Message::OctaveInput);
+    ui.min_bounds.emit(s, Message::MinBounds);
 
-    ui.noise_freq_input.emit(s, Message::FreqInput);
+    ui.max_bounds.emit(s, Message::MaxBounds);
 
-    ui.noise_lacunarity_input.emit(s, Message::LacInput);
+    ui.detail_level.emit(s, Message::Lod);
 
-    ui.high_elev_slider.emit(s, Message::MtnSlider);
-
-    ui.sea_elev_slider.emit(s, Message::SeaSlider);
+    ui.erod_scale.emit(s, Message::ErodScale);
 
     ui.erosion_cycles_input.emit(s, Message::CycleInput);
 
     ui.erode_terrain_button.emit(s, Message::ErodeButton);
 
-    ui.generate_hydro_prev.emit(s, Message::FullPreview);
+    ui.generate_hydro_prev_incr.emit(s, Message::FullPreviewIncremental);
+
+    ui.generate_hydro_prev_sing.emit(s, Message::FullPreviewSingular);
 
     ui.turn_right_vis.emit(s, Message::TurnViewRight);
 
@@ -581,75 +558,92 @@ fn main() {
 
     ui.max_height_input.emit(s, Message::MaxHeightInput);
 
+    ui.high_elev_slider.emit(s, Message::MtnSlider);
+
+    ui.sea_elev_slider.emit(s, Message::SeaSlider);
+
     ui.layer_slider.emit(s, Message::Layer);
 
     let target = *camera.target();
 
     let camera_y = camera.position().y;
 
+    let win_icon = image::PngImage::load("icons/win.png").unwrap();
+    let mut heightmap_importer_ui = ui::HeightmapInterface::heightmap_dialog();
+    let mut heightmap_importer_win = heightmap_importer_ui.heightmap_dialog_win.clone();
+    heightmap_importer_win.set_icon(Some(win_icon));
+    heightmap_importer_win.hide();
+    heightmap_importer_ui.browse_button.emit(s, Message::BrowseFile);
+    heightmap_importer_ui.import_button.emit(s, Message::ImportButton);
+    heightmap_importer_ui.file_box.emit(s, Message::FileBox);
+
+    let mut dir: PathBuf = PathBuf::new();
+
     while app.wait() {
         if let Some(msg) = r.recv() {
             match msg {
+                Message::ImportHeightmap => {
+                    heightmap_importer_win.show();
+                }
+                Message::MinBounds => {
+                    // println!("Has changed: {}", ui.min_bounds.changed());
+                    min_bounds_do(&mut ui.min_bounds, &mut file);
+                    generate_terrain(&mut ui.preview_box_topo, &mut file);
+                    println!("{:?}", file.topography);
+                }
+                Message::MtnSlider => {
+                    file.topography.mountain_pct = ui.high_elev_slider.value();
+                    generate_terrain(&mut ui.preview_box_topo, &mut file);
+                }
+                Message::SeaSlider => {
+                    file.topography.sea_pct = ui.sea_elev_slider.value();
+                    generate_terrain(&mut ui.preview_box_topo, &mut file);
+                }
+                Message::MaxBounds => {
+                    max_bounds_do(&mut ui.max_bounds, &mut file);
+                    generate_terrain(&mut ui.preview_box_topo, &mut file);
+                    println!("{:?}", file.topography)
+                }
+                Message::Lod => {
+                    lod_do(&mut ui.detail_level, &mut file);
+                    generate_terrain(&mut ui.preview_box_topo, &mut file);
+                    println!("{:?}", file.topography)
+                }
+                Message::ErodScale => {
+                    erod_scale_do(&mut ui.erod_scale, &mut file);
+                    generate_terrain(&mut ui.preview_box_topo, &mut file);
+                    println!("{:?}", file.topography)
+                }
                 Message::ExportMap => { export_do(&mut file) }
-                Message::MinHeightInput => { topo_settings.min_height = ui.min_height_input.value() as i32 }
-                Message::MaxHeightInput => { topo_settings.max_height = ui.max_height_input.value() as i32 }
-                Message::SimplexChoice => {
-                    topography::change_noise_type(NoiseTypesUi::Simplex, &mut file);
-                    aux_choice_do(&mut file);
-                    topography::update_noise_img(&mut ui.preview_box_topo, &mut file, 0);
-                }
-                Message::PerlinChoice => {
-                    topography::change_noise_type(NoiseTypesUi::Perlin, &mut file);
-                    aux_choice_do(&mut file);
-                    topography::update_noise_img(&mut ui.preview_box_topo, &mut file, 0);
-                }
-                Message::BillowChoice => {
-                    topography::change_noise_type(NoiseTypesUi::BillowPerlin, &mut file);
-                    aux_choice_do(&mut file);
-                    topography::update_noise_img(&mut ui.preview_box_topo, &mut file, 0);
-                }
+                Message::MinHeightInput => { file.topography.min_height = ui.min_height_input.value() as i32 }
+                Message::MaxHeightInput => { file.topography.max_height = ui.max_height_input.value() as i32 }
+
                 Message::SeedRandom => {
                     seed_random_do(
                         &mut ui.seed_random_button,
                         &mut file,
                         &mut ui.seed_input,
                     );
-                    topography::update_noise_img(&mut ui.preview_box_topo, &mut file, 0);
+                    generate_terrain(&mut ui.preview_box_topo, &mut file);
                 }
                 Message::SeedInput => {
                     seed_input_do(&mut ui.seed_input, &mut file);
-                    topography::update_noise_img(&mut ui.preview_box_topo, &mut file, 0);
-                }
-                Message::OctaveInput => {
-                    topography::octaves_input_do(&mut ui.noise_octaves_input, &mut file);
-                    topography::update_noise_img(&mut ui.preview_box_topo, &mut file, 0);
-                }
-                Message::FreqInput => {
-                    topography::frequency_input_do(&mut ui.noise_freq_input, &mut file);
-                    topography::update_noise_img(&mut ui.preview_box_topo, &mut file, 0);
-                }
-                Message::LacInput => {
-                    topography::lacunarity_input_do(&mut ui.noise_lacunarity_input, &mut file);
-                    topography::update_noise_img(&mut ui.preview_box_topo, &mut file, 0);
-                }
-                Message::MtnSlider => {
-                    topography::mtn_slider_do(&mut ui.high_elev_slider, &mut file);
-                    topography::update_noise_img(&mut ui.preview_box_topo, &mut file, 0);
-                }
-                Message::SeaSlider => {
-                    topography::sea_slider_do(&mut ui.sea_elev_slider, &mut file);
-                    topography::update_noise_img(&mut ui.preview_box_topo, &mut file, 0);
+                    generate_terrain(&mut ui.preview_box_topo, &mut file);
                 }
                 Message::CycleInput => {
                     topography::cycle_input_do(&mut ui.erosion_cycles_input, &mut file)
                 }
                 Message::ErodeButton => {
                     topography::erode_terrain_preview(&mut file);
-                    topography::update_noise_img(&mut ui.preview_erosion_topo, &mut file, 1);
+                    topography::update_noise_img(&mut ui.preview_erosion_topo, &mut file, 1, ColorDepth::Rgba8);
                 }
-                Message::FullPreview => {
-                    hydro::hydro_preview_do(&mut file);
-                    hydro::erode_heightmap_full(&mut file);
+                Message::FullPreviewIncremental => {
+                    hydro::erode_heightmap_full(&mut file, true);
+                    hydro::update_hydro_prev(&mut ui.hydro_preview, true, &mut file);
+                    hydro::update_hydro_prev(&mut ui.hydro_mask_preview, false, &mut file);
+                }
+                Message::FullPreviewSingular => {
+                    hydro::erode_heightmap_full(&mut file, false);
                     hydro::update_hydro_prev(&mut ui.hydro_preview, true, &mut file);
                     hydro::update_hydro_prev(&mut ui.hydro_mask_preview, false, &mut file);
                 }
@@ -714,23 +708,23 @@ fn main() {
                     let max_total = map.iter().as_slice().iter().max().unwrap();
 
                     for component in grid.as_mut_slice() {
-                                let mut h: i32;
-                                match component.index.1 {
-                                    0 => {
-                                        let dynamic = DynamicImage::from(map.clone());
-                                        let area = dynamic.clone().crop_imm(component_size as u32 * component.index.0 as u32, component_size as u32 * component.index.2 as u32, component_size as u32, component_size as u32);
-                                        h = get_height(&area, file.topography.clone().max_height as f64, *min_total, *max_total);
-                                    },
-                                    _ => { h = 4000 * component.index.1; },
-                                };
-                                component.altitude = h as f64;
-                                let gen = GenData::gen_year_data(file.weather.clone().latitude as i32, component.altitude, component.index, noise.clone(), file.weather.clone().koppen.unwrap());
+                        let mut h: i32;
+                        match component.index.1 {
+                            0 => {
+                                let dynamic = DynamicImage::from(map.clone());
+                                let area = dynamic.clone().crop_imm(component_size as u32 * component.index.0 as u32, component_size as u32 * component.index.2 as u32, component_size as u32, component_size as u32);
+                                h = get_height(&area, file.topography.clone().max_height as f64, *min_total, *max_total);
+                            },
+                            _ => { h = 4000 * component.index.1; },
+                        };
+                        component.altitude = h as f64;
+                        let gen = GenData::gen_year_data(file.weather.clone().latitude as i32, component.altitude, component.index, noise.clone(), file.weather.clone().koppen.unwrap());
 
-                                component.humidity = gen.humidity;
-                                component.pressure = gen.pressure;
-                                component.td = gen.td;
-                                component.temperature = gen.temperature;
-                                component.wind = gen.wind;
+                        component.humidity = gen.humidity;
+                        component.pressure = gen.pressure;
+                        component.td = gen.td;
+                        component.temperature = gen.temperature;
+                        component.wind = gen.wind;
                     }
                     file.weather_data = grid.clone();
                     println!("Finished.");
@@ -793,12 +787,12 @@ fn main() {
                     file.eroded_raw_512 = p.0.eroded_raw_512;
                     file.color_map_512 = p.0.color_map_512.clone();
                     file.raw_map_512 = p.0.raw_map_512;
-                    
+
                     if !file.color_map_512.is_empty() {
-                        topography::update_noise_img(&mut ui.preview_box_topo, &file, 0);
+                        topography::update_noise_img(&mut ui.preview_box_topo, &file, 0, ColorDepth::Rgb8);
                     }
                     if !file.color_eroded_512.is_empty() {
-                        topography::update_noise_img(&mut ui.preview_erosion_topo, &file, 1);
+                        topography::update_noise_img(&mut ui.preview_erosion_topo, &file, 1, ColorDepth::Rgba8);
                     }
                     if !file.eroded_full_color.is_empty() {
                         hydro::update_hydro_prev(&mut ui.hydro_preview, true, &mut file);
@@ -806,26 +800,20 @@ fn main() {
                     if !file.discharge.is_empty() {
                         hydro::update_hydro_prev(&mut ui.hydro_mask_preview, false, &mut file);
                     }
-                    
 
-                    ui.seed_input.set_value(format!("{}", &file.topography.seed.unwrap().clone()).as_str());
+
+                    ui.seed_input.set_value(format!("{}", &file.topography.seed.unwrap()).as_str());
                     ui.seed_input.redraw();
-                    ui.noise_octaves_input.set_value(format!("{}", &file.topography.noise_octaves.unwrap().clone()).as_str());
-                    ui.noise_octaves_input.redraw();
-                    ui.noise_freq_input.set_value(format!("{}", &file.topography.noise_frequency.unwrap().clone()).as_str());
-                    ui.noise_freq_input.redraw();
-                    ui.noise_lacunarity_input.set_value(format!("{}", &file.topography.noise_lacunarity.unwrap().clone()).as_str());
-                    ui.noise_lacunarity_input.redraw();
+                    ui.min_bounds.set_value(format!("{}", &file.topography.min_bound.0.clone()).as_str().parse().unwrap());
+                    ui.max_bounds.redraw();
+                    ui.detail_level.set_value(format!("{}", &file.topography.lod.clone()).as_str().parse().unwrap());
+                    ui.detail_level.redraw();
+                    ui.erod_scale.set_value(format!("{}", &file.topography.erod_scale.clone()).as_str().parse().unwrap());
+                    ui.erod_scale.redraw();
                     ui.min_height_input.set_value(file.topography.min_height.clone() as f64);
                     ui.min_height_input.redraw();
                     ui.max_height_input.set_value(file.topography.max_height.clone() as f64);
                     ui.max_height_input.redraw();
-                    match &file.topography.noise_type.clone().unwrap() {
-                        NoiseTypesUi::Simplex => ui.noise_choice.set_value(0),
-                        NoiseTypesUi::Perlin => ui.noise_choice.set_value(1),
-                        NoiseTypesUi::BillowPerlin => ui.noise_choice.set_value(2)
-                    };
-                    ui.noise_choice.redraw();
                     ui.erosion_cycles_input.set_value(file.topography.erosion_cycles.clone() as f64);
                     ui.erosion_cycles_input.redraw();
                     ui.weather_seed_input.set_value(format!("{}", &file.weather.seed.unwrap().clone()).as_str());
@@ -860,6 +848,48 @@ fn main() {
                     );
                     terrain = terrain_map;
                 }
+                Message::BrowseFile => {
+                    let mut nfc = dialog::NativeFileChooser::new(dialog::NativeFileChooserType::BrowseFile);
+                    nfc.set_filter("Image files\t*.{bmp,png,jpeg,jpg,tif,tiff}");
+                    nfc.show();
+                    let fetched_dir = nfc.filename();
+                    if fetched_dir.exists() {
+                        let i = image_crate::open(fetched_dir.clone()).unwrap();
+                        if i.dimensions().0 - i.dimensions().1 != 0 {
+                            dialog::alert_default("The image's dimensions must be square! (e.g. 128x128, 7600x7600...)");
+                        } else {
+                            dir = fetched_dir;
+                            heightmap_importer_ui.file_box.set_value(dir.clone().to_str().unwrap());
+                        }
+                    } else {
+                        dialog::alert_default("File directory is null or non-existent!")
+                    }
+                }
+                Message::ImportButton => {
+                    if !dir.exists() {
+                        dialog::alert_default("Can't import non-existent file! Check the dialog parameters.")
+                    } else {
+                        let i = image_crate::open(dir.clone()).unwrap();
+                        let res = i.resize(8192, 8192, FilterType::CatmullRom);
+                        let r_small = i.resize(512, 512, FilterType::CatmullRom);
+                        file.raw_map_512 = r_small.to_luma16().into_raw();
+                        file.raw_full = res.to_luma16().into_raw();
+                        heightmap_importer_win.hide();
+                        apply_color(&mut file);
+                        topography::update_noise_img(&mut ui.preview_box_topo, &file, 0, ColorDepth::Rgba8);;
+                    }
+                }
+                Message::FileBox => {
+                    if heightmap_importer_ui.file_box.changed() {
+                        dir = PathBuf::from(heightmap_importer_ui.file_box.value());
+                        if dir.exists() {
+                            let i = image_crate::open(dir.clone()).unwrap();
+                            if i.dimensions().0 - i.dimensions().1 != 0 {
+                                dialog::alert_default("The image's dimensions must be square! (e.g. 128x128, 7600x7600...)");
+                            }
+                        }
+                    }
+                }
             }
         }
         {
@@ -879,5 +909,6 @@ fn main() {
         }
     }
 }
+
 
 

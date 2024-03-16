@@ -2,8 +2,8 @@ use noise::{Billow, Curve, Fbm, MultiFractal, Perlin, Seedable, Simplex};
 use fltk::prelude::{InputExt, MenuExt, ValuatorExt, WidgetExt};
 use fltk::app::Sender;
 use fltk::{enums, image, menu};
-use noise::utils::{ImageRenderer, NoiseMap, NoiseMapBuilder, PlaneMapBuilder};
-use image_crate::{ImageBuffer, Luma, Pixel};
+use noise::utils::{Color, ImageRenderer, NoiseMap, NoiseMapBuilder, PlaneMapBuilder};
+use image_crate::{ImageBuffer, Luma, Pixel, Rgb};
 use fltk::enums::ColorDepth;
 use fltk::image::{RgbImage, SharedImage};
 use map_range::MapRange;
@@ -17,16 +17,34 @@ pub const PREV_DIMENSIONS: usize = 512;
 
 pub const DEFAULT_TOPOSETTINGS: TopoSettings =  TopoSettings {
 seed: Some(42949),
-noise_type: Some(NoiseTypesUi::BillowPerlin),
-noise_octaves: Some(20),
-noise_frequency: Some(3.0),
-noise_lacunarity: Some(4.0),
+max_alt: 0.0,
+min_bound: (0.0, 0.0),
+max_bound: (100.0, 100.0),
+lod: 4.0,
+erod_scale: 0.0,
 mountain_pct: 25.0,
 sea_pct: 5.0,
 min_height: -50,
 max_height: 1000,
 erosion_cycles: 0,
 };
+
+pub fn min_bounds_do(w: &mut impl ValuatorExt, data: &mut FileData) {
+        println!("asdfa: {}", w.value());
+        data.topography.set_min_bounds(w.value());
+}
+
+pub fn max_bounds_do(w: &mut impl ValuatorExt, data: &mut FileData) {
+        data.topography.set_max_bounds(w.value());
+}
+
+pub fn lod_do(w: &mut impl ValuatorExt, data: &mut FileData) {
+        data.topography.set_lod(w.value());
+}
+
+pub fn erod_scale_do(w: &mut impl ValuatorExt, data: &mut FileData) {
+        data.topography.set_erod_scale(w.value());
+}
 
 pub fn erode_terrain_preview(file: &mut FileData) {
     let b: ImageBuffer<Luma<u16>, Vec<u16>> = ImageBuffer::from_raw(512, 512, file.clone().raw_map_512).unwrap();
@@ -66,57 +84,80 @@ pub fn erode_terrain_preview(file: &mut FileData) {
     file.eroded_raw_512 = buffer.clone().into_raw();
     apply_color_eroded(file, 512);
 }
+pub fn color_eroded_image(file: &mut FileData) {
+    file.color_eroded_512.clear();
+    let colormap: Vec<([u8; 3], f64)> = vec![
+        ([70, 150, 200], 0.0),
+        ([240, 240, 210], 0.5),
+        ([190, 200, 120], 1.0),
+        ([25, 100, 25], 18.0),
+        ([15, 60, 15], 30.0),
+    ];
+    let get_color = |altitude: f64| -> [u8; 3] {
+        let color_index = {
+            let mut i = 0;
+            while i < colormap.len() {
+                if altitude < colormap[i].1 {
+                    break;
+                }
+                i += 1;
+            }
+            i
+        };
 
-fn apply_variations_perlin(source: Fbm<Perlin>, mtn: f64, sea: f64) -> Curve<f64, Fbm<Perlin>, 2> {
-    let sealevel = sea / 100.0;
-    let mountainlevel = mtn / 100.0;
+        if color_index == 0 {
+            colormap[0].0
+        } else if color_index == colormap.len() {
+            colormap[colormap.len() - 1].0
+        } else {
+            let color_a = colormap[color_index - 1];
+            let color_b = colormap[color_index];
 
-    let curved: Curve<f64, Fbm<Perlin>, 2> = Curve::new(source)
-        .add_control_point(1.0, mountainlevel)
-        .add_control_point(0.999, mountainlevel)
-        .add_control_point(-0.999, 0.0 - sealevel)
-        .add_control_point(-1.0, 0.0 - sealevel);
+            let prop_a = color_a.1;
+            let prop_b = color_b.1;
 
-    curved
-}
+            let prop = (altitude - prop_a) / (prop_b - prop_a);
 
-fn apply_variations_simplex(
-    source: Fbm<Simplex>,
-    mtn: f64,
-    sea: f64,
-) -> Curve<f64, Fbm<Simplex>, 2> {
-    let sealevel = sea / 100.0;
-    let mountainlevel = mtn / 100.0;
+            let color = [
+                (color_a.0[0] as f64 + (color_b.0[0] as f64 - color_a.0[0] as f64) * prop) as u8,
+                (color_a.0[1] as f64 + (color_b.0[1] as f64 - color_a.0[1] as f64) * prop) as u8,
+                (color_a.0[2] as f64 + (color_b.0[2] as f64 - color_a.0[2] as f64) * prop) as u8,
+            ];
 
-    let curved: Curve<f64, Fbm<Simplex>, 2> = Curve::new(source)
-        .add_control_point(1.0, mountainlevel)
-        .add_control_point(0.999, mountainlevel)
-        .add_control_point(-0.999, 0.0 - sealevel)
-        .add_control_point(-1.0, 0.0 - sealevel);
-
-    curved
-}
-
-fn apply_variations_billow(
-    source: Billow<Perlin>,
-    mtn: f64,
-    sea: f64,
-) -> Curve<f64, Billow<Perlin>, 2> {
-    let sealevel = sea / 100.0;
-    let mountainlevel = mtn / 100.0;
-
-    let curved: Curve<f64, Billow<Perlin>, 2> = Curve::new(source)
-        .add_control_point(1.0, mountainlevel)
-        .add_control_point(0.999, mountainlevel)
-        .add_control_point(-0.999, 0.0 - sealevel)
-        .add_control_point(-1.0, 0.0 - sealevel);
-
-    curved
-}
-
-pub fn apply_color_eroded(file: &mut FileData, size: u16) {
+            color
+        }
+    };
+    let mut i: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::new(512, 512);
+    let r: ImageBuffer<Luma<u16>, Vec<u16>> = ImageBuffer::from_raw(512, 512, file.raw_map_512.clone()).unwrap();
     
-    let gradient = noise::utils::ColorGradient::new().build_terrain_gradient();
+    for x in 0..512 {
+        for y in 0..512 {
+            let p = r.get_pixel(x, y);
+            let raw_altitude = ((p[0] / 32767) as f64 * file.topography.max_alt);
+            let color = get_color(raw_altitude);
+            i.put_pixel(x, y, Rgb::from(color));
+        }
+    }
+    file.color_eroded_512 = i.into_raw();
+}
+pub fn apply_color_eroded(file: &mut FileData, size: u16) {
+    let colormap: Vec<([u8; 3], f64)> = vec![
+        ([70, 150, 200], 0.0),
+        ([240, 240, 210], 0.5),
+        ([190, 200, 120], 1.0),
+        ([25, 100, 25], 18.0),
+        ([15, 60, 15], 30.0),
+    ];
+    let p1 = 0.5.map_range(0.0..30.0, -1.0..1.0);
+    let p2 = 1.0.map_range(0.0..30.0, -1.0..1.0);
+    let p3 = 18.0.map_range(0.0..30.0, -1.0..1.0);
+    let p4 = 30.0.map_range(0.0..30.0, -1.0..1.0);
+    let gradient = noise::utils::ColorGradient::new()
+        .add_gradient_point(p1, Color::from([240, 240, 210, 255]))
+        .add_gradient_point(p2, Color::from([190, 200, 120, 255]))
+        .add_gradient_point(p3, Color::from([25, 100, 25, 255]))
+        .add_gradient_point(p4, Color::from([15, 60, 15, 255]));
+    
     let data = match size {
         512 => file.eroded_raw_512.clone(),
         8192 => file.eroded_full.clone(),
@@ -158,78 +199,66 @@ pub fn apply_color_eroded(file: &mut FileData, size: u16) {
 
 }
 
-pub fn update_perlin_noise(data: &mut FileData, dimensions: usize) {
-    
-    let mut perlin: Fbm<Perlin> = Default::default();
-    perlin = perlin
-        .set_seed(data.topography.seed.unwrap())
-        .set_octaves(data.topography.noise_octaves.unwrap() as usize)
-        .set_frequency(data.topography.noise_frequency.unwrap())
-        .set_lacunarity(data.topography.noise_lacunarity.unwrap());
+pub fn apply_color(file: &mut FileData) {
+    let colormap: Vec<([u8; 3], f64)> = vec![
+        ([70, 150, 200], 0.0),
+        ([240, 240, 210], 0.5),
+        ([190, 200, 120], 1.0),
+        ([25, 100, 25], 18.0),
+        ([15, 60, 15], 30.0),
+    ];
+    let p1 = 0.5.map_range(0.0..30.0, -1.0..1.0);
+    let p2 = 1.0.map_range(0.0..30.0, -1.0..1.0);
+    let p3 = 18.0.map_range(0.0..30.0, -1.0..1.0);
+    let p4 = 30.0.map_range(0.0..30.0, -1.0..1.0);
+    let gradient = noise::utils::ColorGradient::new()
+        .add_gradient_point(p1, Color::from([240, 240, 210, 255]))
+        .add_gradient_point(p2, Color::from([190, 200, 120, 255]))
+        .add_gradient_point(p3, Color::from([25, 100, 25, 255]))
+        .add_gradient_point(p4, Color::from([15, 60, 15, 255]));
 
-    let curved = apply_variations_perlin(perlin, data.topography.mountain_pct, data.topography.sea_pct);
+    let data = file.raw_map_512.clone();
+    let eroded_image: ImageBuffer<Luma<u16>, Vec<u16>> = image_crate::ImageBuffer::from_raw(512, 512, data).unwrap();
+    let mut map = NoiseMap::new(512, 512);
 
-    // .add_control_point(sealevel, 0.0)
+    for x in 0..512 {
+        for y in 0..512 {
+            let pixel = eroded_image
+                .get_pixel(x as u32, y as u32)
+                .channels()
+                .first()
+                .unwrap();
+            let p_i = *pixel as f32;
+            let output = p_i.map_range(0.0..32767.0, -1.0..1.0);
+            map.set_value(x as usize, y as usize, output as f64);
+        }
+    }
 
-    let map = PlaneMapBuilder::<Curve<f64, Fbm<Perlin>, 2>, 2>::new(curved)
-        .set_size(dimensions, dimensions)
-        .set_is_seamless(false)
-        .set_x_bounds(-1.0, 1.0)
-        .set_y_bounds(-1.0, 1.0)
-        .build();
+    let mut r = ImageRenderer::new()
+        .set_gradient(gradient)
+        .set_light_elevation(Default::default())
+        .set_light_color(Default::default())
+        .set_light_azimuth(Default::default())
+        .set_light_brightness(Default::default())
+        .set_light_contrast(Default::default())
+        .set_light_intensity(Default::default());
+    r.disable_light();
+    let b = r.render(&map);
+    let i = get_raw_u8(&b);
 
-    let gradient = noise::utils::ColorGradient::new().build_terrain_gradient();
-    let renderer = ImageRenderer::new().set_gradient(gradient).render(&map);
-
-    // for x in 0..DIMENSIONS {
-    //     for y in 0..DIMENSIONS {
-    //         println!("{}", map.get_value(x, y));
-    //     }
-    // }
-
-    let a = get_raw_u8(&renderer);
-    let b = get_raw_u16(&map);
-
-    data.raw_map_512 = b.to_vec();
-    data.color_map_512 = a.to_vec();
-
-}
-
-pub fn update_simplex_noise(dimensions: usize, data: &mut FileData) {
-    
-    let mut simplex: Fbm<Simplex> = Default::default();
-    simplex = simplex
-        .set_seed(data.topography.seed.unwrap())
-        .set_octaves(data.topography.noise_octaves.unwrap() as usize)
-        .set_frequency(data.topography.noise_frequency.unwrap())
-        .set_lacunarity(data.topography.noise_lacunarity.unwrap());
-
-    let curved = apply_variations_simplex(simplex, data.topography.mountain_pct, data.topography.sea_pct);
-
-    // .add_control_point(sealevel, 0.0)
-    let map = PlaneMapBuilder::<Curve<f64, Fbm<Simplex>, 2>, 2>::new(curved)
-        .set_size(dimensions, dimensions)
-        .set_is_seamless(false)
-        .set_x_bounds(-1.0, 1.0)
-        .set_y_bounds(-1.0, 1.0)
-        .build();
-
-    let gradient = noise::utils::ColorGradient::new().build_terrain_gradient();
-    let renderer = ImageRenderer::new().set_gradient(gradient).render(&map);
-
-    data.raw_map_512 = get_raw_u16(&map).to_vec();
-    data.color_map_512 = get_raw_u8(&renderer).to_vec();
+    file.color_map_512 = i.to_vec();
 
 }
+
 
 /// 0 => preview_box_topo (512 not eroded)
 /// 1 => preview_erosion_topo (512 eroded)
 /// 2 => hydro_preview (8192 eroded)
 /// 3 => hydro_mask_preview (8192 water mask)
-pub fn update_noise_img(w: &mut impl WidgetExt, data: &FileData, img_type: u8) {
+pub fn update_noise_img(w: &mut impl WidgetExt, data: &FileData, img_type: u8, depth: ColorDepth) {
     let map = match img_type {
-        0 => { image::RgbImage::new(data.color_map_512.as_slice(), 512, 512, ColorDepth::Rgba8).unwrap() },
-        1 => image::RgbImage::new(data.color_eroded_512.as_slice(), 512, 512, ColorDepth::Rgba8).unwrap(),
+        0 => { image::RgbImage::new(data.color_map_512.as_slice(), 512, 512, depth).unwrap() },
+        1 => image::RgbImage::new(data.color_eroded_512.as_slice(), 512, 512,depth).unwrap(),
         _ => RgbImage::new(&[], 512, 512, ColorDepth::Rgba8).unwrap()
     };
     w.set_image_scaled(None::<SharedImage>);
@@ -238,147 +267,7 @@ pub fn update_noise_img(w: &mut impl WidgetExt, data: &FileData, img_type: u8) {
     w.redraw();
 }
 
-pub fn update_billow_noise(dimensions: usize, data: &mut FileData) {
-    
-    let mut perlin: Billow<Perlin> = Default::default();
-    perlin = perlin
-        .set_seed(data.topography.seed.unwrap())
-        .set_octaves(data.topography.noise_octaves.unwrap() as usize)
-        .set_frequency(data.topography.noise_frequency.unwrap())
-        .set_lacunarity(data.topography.noise_lacunarity.unwrap());
 
-    let curved = apply_variations_billow(perlin, data.topography.mountain_pct, data.topography.sea_pct);
-
-    // .add_control_point(sealevel, 0.0)
-    let map = PlaneMapBuilder::<Curve<f64, Billow<Perlin>, 2>, 2>::new(curved)
-        .set_size(dimensions, dimensions)
-        .set_is_seamless(false)
-        .set_x_bounds(-1.0, 1.0)
-        .set_y_bounds(-1.0, 1.0)
-        .build();
-
-    let gradient = noise::utils::ColorGradient::new().build_terrain_gradient();
-    let renderer = ImageRenderer::new().set_gradient(gradient).render(&map);
-
-    let a = get_raw_u8(&renderer);
-    let b = get_raw_u16(&map);
-
-    data.raw_map_512 = b.to_vec();
-    data.color_map_512 = a.to_vec();
-
-}
-
-pub fn noise_choice_do(w: &mut impl MenuExt, sender: &Sender<Message>) {
-    w.add_emit(
-        "Simplex",
-        enums::Shortcut::None,
-        menu::MenuFlag::Normal,
-        *sender,
-        Message::SimplexChoice,
-    );
-    w.add_emit(
-        "Perlin",
-        enums::Shortcut::None,
-        menu::MenuFlag::Normal,
-        *sender,
-        Message::PerlinChoice,
-    );
-    w.add_emit(
-        "Billowed Perlin",
-        enums::Shortcut::None,
-        menu::MenuFlag::Normal,
-        *sender,
-        Message::BillowChoice,
-    );
-}
-
-pub fn change_noise_type(noise_types_ui: NoiseTypesUi, data: &mut FileData) {
-    data.topography.set_type(Some(noise_types_ui));
-}
-
-pub fn octaves_input_do(w: &mut impl InputExt, data: &mut FileData) {
-    data.topography.set_octaves(Some(w.value().parse::<u32>().unwrap()));
-
-    match data.topography.noise_type {
-        Some(NoiseTypesUi::Simplex) => {
-            update_simplex_noise(DIMENSIONS, data);
-        }
-        Some(NoiseTypesUi::Perlin) => {
-            update_perlin_noise(data, DIMENSIONS);
-        }
-        Some(NoiseTypesUi::BillowPerlin) => {
-            update_billow_noise(DIMENSIONS, data);
-        }
-        _ => {}
-    };
-}
-
-pub fn frequency_input_do(w: &mut impl InputExt, data: &mut FileData) {
-    println!("Has input changed? {}", w.changed());
-    data.topography.set_frequency(Some(w.value().parse::<f64>().unwrap()));
-
-    match data.topography.noise_type {
-        Some(NoiseTypesUi::Simplex) => {
-            update_simplex_noise(DIMENSIONS, data);
-        }
-        Some(NoiseTypesUi::Perlin) => {
-            update_perlin_noise(data, DIMENSIONS);
-        }
-        Some(NoiseTypesUi::BillowPerlin) => {
-            update_billow_noise(DIMENSIONS, data);
-        }
-        _ => {}
-    };
-}
-
-pub fn lacunarity_input_do(w: &mut impl InputExt, data: &mut FileData) {
-    data.topography.set_lacunarity(Some(w.value().parse().unwrap()));
-
-    match data.topography.noise_type {
-        Some(NoiseTypesUi::Simplex) => {
-            update_simplex_noise(DIMENSIONS, data);
-        }
-        Some(NoiseTypesUi::Perlin) => {
-            update_perlin_noise(data, DIMENSIONS);
-        }
-        Some(NoiseTypesUi::BillowPerlin) => {
-            update_billow_noise(DIMENSIONS, data);
-        }
-        _ => {}
-    };
-}
-
-pub fn mtn_slider_do(w: &mut impl ValuatorExt, data: &mut FileData) {
-    data.topography.set_mtn_pct(w.value());
-    match data.topography.noise_type {
-        Some(NoiseTypesUi::Simplex) => {
-            update_simplex_noise(DIMENSIONS, data);
-        }
-        Some(NoiseTypesUi::Perlin) => {
-            update_perlin_noise(data, DIMENSIONS);
-        }
-        Some(NoiseTypesUi::BillowPerlin) => {
-            update_billow_noise(DIMENSIONS, data);
-        }
-        _ => {}
-    };
-}
-
-pub fn sea_slider_do(w: &mut impl ValuatorExt, data: &mut FileData) {
-    data.topography.set_sea_pct(w.value());
-    match data.topography.noise_type {
-        Some(NoiseTypesUi::Simplex) => {
-            update_simplex_noise(DIMENSIONS, data);
-        }
-        Some(NoiseTypesUi::Perlin) => {
-            update_perlin_noise(data, DIMENSIONS);
-        }
-        Some(NoiseTypesUi::BillowPerlin) => {
-            update_billow_noise(DIMENSIONS, data);
-        }
-        _ => {}
-    };
-}
 
 pub fn cycle_input_do(w: &mut impl ValuatorExt, data: &mut FileData) {
     data.topography.set_cycles(w.value() as u64);
