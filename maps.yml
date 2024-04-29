@@ -1,0 +1,7 @@
+Tiny:
+  biom: PolarZone
+  height_conversion: 0.2
+  height_map_path: heightmap.png
+  max_soil_depth: 300.0
+  pixel_size: 100.0
+  texture_map_path: soils.png
