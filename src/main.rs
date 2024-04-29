@@ -1,3 +1,5 @@
+#![feature(vec_push_within_capacity)]
+
 use crate::topo_settings::TopoSettings;
 use fltk::app::Sender;
 use map_range::MapRange;
@@ -23,12 +25,11 @@ use fltk::enums::{ColorDepth, Event, Shortcut};
 use image_crate::imageops::FilterType;
 use ron::de::from_reader;
 use serde::{Deserialize, Serialize};
-
-
 use topo_settings::NoiseTypesUi;
 use topography::{DEFAULT_TOPOSETTINGS, DIMENSIONS};
 use weather_pane::DEFAULT_WEATHERSETTINGS;
 use crate::fastlem_opt::generate_terrain;
+use crate::soil_def::{base_choice_init, load_and_show_veg};
 use crate::topography::{max_bounds_do, min_bounds_do, lod_do, erod_scale_do, apply_color_eroded, apply_color};
 use crate::ui::HeightmapInterface;
 use crate::utils::get_height;
@@ -47,6 +48,8 @@ mod hydro;
 mod weather_pane;
 mod fastlem_opt;
 
+mod soil;
+mod soil_def;
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 struct FileData {
@@ -576,6 +579,10 @@ fn main() {
     heightmap_importer_ui.browse_button.emit(s, Message::BrowseFile);
     heightmap_importer_ui.import_button.emit(s, Message::ImportButton);
     heightmap_importer_ui.file_box.emit(s, Message::FileBox);
+    
+    base_choice_init(&mut ui.base_soil_choice);
+    load_and_show_veg(&mut ui.vegetation_list);
+    
 
     let mut dir: PathBuf = PathBuf::new();
 
