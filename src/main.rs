@@ -119,8 +119,15 @@ enum Message {
 struct ViewState {
     mode: WeatherVisualization,
     hour: u32,
-    layer: u8
+    layer: u8,
+    proj: ViewMode
 }
+
+enum ViewMode {
+    2D,
+    3D
+}
+
 
 fn menu_do(w: &mut impl MenuExt, sender: &Sender<Message>) {
     w.add_emit(
@@ -307,7 +314,8 @@ fn main() {
     let mut view_state = ViewState {
         mode: Init,
         hour: 0,
-        layer: 0
+        layer: 0,
+        proj: ViewMode::3D
     };
 
     let climates: [Climate; 18] = [koppen_cfa(), koppen_cfb(), koppen_cfc(), koppen_dfb(), koppen_dfc(), koppen_dfa(), koppen_cwc(), koppen_cwb(), koppen_cwa(), koppen_et(), koppen_afam(), koppen_as(), koppen_aw(), koppen_dsc(), koppen_bsh(), koppen_bsk(), koppen_bwh(), koppen_bwk()];
@@ -676,7 +684,11 @@ fn main() {
                         6 => view_state.layer = 6,
                         _ => view_state.layer = 0
                     }
-                    weather_pane::update_grid_at_time(view_state.hour, &mut file.weather_data, &mut mesh_v, &view_state);
+                    match view_state.proj {
+                        ViewMode::3D => weather_pane::update_grid_at_time(view_state.hour, &mut file.weather_data, &mut mesh_v, &view_state);
+                        ViewMode::2D => weather_pane::vis_image(&mut ui.putframehere, view_state.hour, &mut file.weather_data, &view_state);
+                    }
+                    
                 }
                 Message::WeatherSeedInput => {
                     weather_pane::weather_seed_do(&mut ui.weather_seed_input, &mut file);
@@ -738,29 +750,44 @@ fn main() {
                 },
                 Message::ViewHumidity => {
                     weather_pane::set_view_state(&mut view_state, WeatherVisualization::Humidity);
-                    weather_pane::update_grid_at_time(view_state.hour, &mut file.weather_data, &mut mesh_v, &view_state);
+                    match view_state.proj {
+                        ViewMode::3D => weather_pane::update_grid_at_time(view_state.hour, &mut file.weather_data, &mut mesh_v, &view_state);
+                        ViewMode::2D => weather_pane::vis_image(&mut ui.putframehere, view_state.hour, &mut file.weather_data, &view_state);
+                    }
                     ui.legend_box.set_image(Some(SharedImage::load("icons/humidity_legend.png").unwrap()));
                     ui.legend_box.redraw_label();
                 },
                 Message::ViewPressure => {
                     weather_pane::set_view_state(&mut view_state, WeatherVisualization::Pressure);
-                    weather_pane::update_grid_at_time(view_state.hour, &mut file.weather_data, &mut mesh_v, &view_state);
+                    match view_state.proj {
+                        ViewMode::3D => weather_pane::update_grid_at_time(view_state.hour, &mut file.weather_data, &mut mesh_v, &view_state);
+                        ViewMode::2D => weather_pane::vis_image(&mut ui.putframehere, view_state.hour, &mut file.weather_data, &view_state);
+                    }
                     ui.legend_box.set_image(Some(SharedImage::load("icons/pressure_legend.png").unwrap()));
                     ui.legend_box.redraw_label();
                 },
                 Message::ViewTemperature => {
                     weather_pane::set_view_state(&mut view_state, WeatherVisualization::Temperature);
-                    weather_pane::update_grid_at_time(view_state.hour, &mut file.weather_data, &mut mesh_v, &view_state);
+                    match view_state.proj {
+                        ViewMode::3D => weather_pane::update_grid_at_time(view_state.hour, &mut file.weather_data, &mut mesh_v, &view_state);
+                        ViewMode::2D => weather_pane::vis_image(&mut ui.putframehere, view_state.hour, &mut file.weather_data, &view_state);
+                    }
                     ui.legend_box.set_image(Some(SharedImage::load("icons/temp_legend.png").unwrap()));
                     ui.legend_box.redraw_label();
                 },
                 Message::ViewWind => {
                     weather_pane::set_view_state(&mut view_state, WeatherVisualization::Wind);
-                    weather_pane::update_grid_at_time(view_state.hour, &mut file.weather_data, &mut mesh_v, &view_state);
+                    match view_state.proj {
+                        ViewMode::3D => weather_pane::update_grid_at_time(view_state.hour, &mut file.weather_data, &mut mesh_v, &view_state);
+                        ViewMode::2D => weather_pane::vis_image(&mut ui.putframehere, view_state.hour, &mut file.weather_data, &view_state);
+                    }
                 },
                 Message::DaySlider => {
                     weather_pane::set_hour(&mut ui.day_vis_slider, &mut view_state);
-                    weather_pane::update_grid_at_time(view_state.hour, &mut file.weather_data, &mut mesh_v, &view_state);
+                    match view_state.proj {
+                        ViewMode::3D => weather_pane::update_grid_at_time(view_state.hour, &mut file.weather_data, &mut mesh_v, &view_state);
+                        ViewMode::2D => weather_pane::vis_image(&mut ui.putframehere, view_state.hour, &mut file.weather_data, &view_state);
+                    }
                 }
                 Message::SaveFile => {
                     save_file_do(&mut file, &mut is_file_workspace, &mut workspace_path, &mut file_name);
