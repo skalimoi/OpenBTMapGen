@@ -48,8 +48,8 @@ impl<T> std::ops::IndexMut<(usize, usize)> for GreyscaleImage<T> {
 #[derive(Deserialize, Serialize)]
 pub struct Map {
     pub biom: String,
-    pub height_map_path: String,
-    pub texture_map_path: String,
+    pub height_map_path: GreyscaleImage<f64>,
+    pub texture_map_path: Vec<u8>,
     pub height_conversion: f64, // The factor to convert a height value of the height-map to the actual height
     pub max_soil_depth: f64,    // in cm, states the maximal depth the ground can have when it has no tilt
     pub pixel_size: f64,        // the size that a pixel covers of the real map in m
@@ -166,38 +166,9 @@ impl SimConfig {
     ) {
         let map = &self.maps;
 
-        let i = image_crate::imageops::resize(&ImageReader::open(&map.height_map_path)
-            .unwrap()
-            .decode()
-            .unwrap()
-            .into_luma16(), 1024, 1024, image_crate::imageops::FilterType::CatmullRom);
+        let height_map_for_insolation = &map.height_map_path.clone();
 
-        let height_map = GreyscaleImage::new(
-            ImageReader::open(&map.height_map_path)
-                .unwrap()
-                .decode()
-                .unwrap()
-                .into_luma16()
-                .into_raw()
-                .into_iter()
-                .map(|x| x as f64)
-                .collect(),
-        );
-        let height_map_for_insolation = GreyscaleImage::new(
-            i
-                .into_raw()
-                .into_iter()
-                .map(|x| x as f64)
-                .collect(),
-        );
-
-        let soil_ids_map = GreyscaleImage::new(
-            ImageReader::open(&map.texture_map_path)
-                .unwrap()
-                .decode()
-                .unwrap()
-                .into_luma8()
-                .into_raw(),
+        let soil_ids_map = &map.texture_map_path.clone();
         );
         let sim_args = SimArgs {
             height_map,
@@ -291,6 +262,10 @@ impl SimConfig {
         // )
         // .unwrap();
     }
+
+    // TODO: HACER STRUCT SOLO PARA ESTAS IMAGENES Y NO TENER QUE GUARDARLAS
+    // TODO: COMPROBAR EL TEMA IMAGEN SI LO COGE BIEN O NO
+    // TODO: TERMINAR DE CONFIGURAR SOIL_DEF.RS
     pub fn calculate_probabilities(&self, map_name: &str, vegetation_names: &[&str], _daylight_hours: i32) {
         let soil_ids_map = GreyscaleImage::new(
             ImageReader::open(&self.maps.texture_map_path)

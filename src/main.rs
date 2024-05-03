@@ -357,6 +357,7 @@ fn main() {
         discharge: vec![]
     };
 
+
     // Initialize grid
     for x in 0..file.weather.clone().grid_size {
         for y in 0..6 {

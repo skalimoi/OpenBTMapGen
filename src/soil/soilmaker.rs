@@ -31,11 +31,19 @@ pub enum SoilColor {
     Sand([u8; 4])
 }
 
-pub fn init_soilmaker(_base_soil: SoilColor, heightmap: &ImageBuffer<Luma<u8>, Vec<u8>>, heightmap16: &ImageBuffer<Luma<u16>, Vec<u16>>, hydro_map: &ImageBuffer<Luma<u8>, Vec<u8>>) {
+pub fn init_soilmaker(base_soil: SoilType, blocklist: &HashMap<bool, SoilType>, heightmap: &ImageBuffer<Luma<u8>, Vec<u8>>, heightmap16: &ImageBuffer<Luma<u16>, Vec<u16>>, hydro_map: &ImageBuffer<Luma<u8>, Vec<u8>>) {
     let mut dynamic = DynamicImage::ImageLuma8(heightmap.clone());
     let mut dynamic_hydro = DynamicImage::ImageLuma8(hydro_map.clone());
     println!("Doing base soil.");
-    let b = init_base(SoilColor::Dirt([5,5,5,255]), DIM as u32);
+    let b = init_base(match base_soil {
+        Dirt => [5,5,5],
+        Silt => [100,100,100],
+        Stone => [16,16,16],
+        Gravel => [32,32,32],
+        Loam => [64,64,64],
+        Clay => [128,128,128],
+        Sand => [200,200,200]
+    }, DIM as u32);
     println!("Doing height.");
     let h = generate_height(&mut dynamic);
     let d_1 = overlay_with_weights(&b, &h, 1.0);
@@ -52,6 +60,20 @@ pub fn init_soilmaker(_base_soil: SoilColor, heightmap: &ImageBuffer<Luma<u8>, V
     let c = generate_coast_sediment(&mut dynamic);
     let d_5 = overlay_with_weights(&d_4, &c, 1.0);
     let mut old_to_convert: buffer_old<Rgb_old<u8>, Vec<u8>> = buffer_old::from_raw(DIM as u32, DIM as u32, d_5.into_rgb8().into_raw()).unwrap();
+    let mut color_vec: Vec<[u8; 4]> = vec![];
+    for (value, soil) in blocklist {
+        if value == true {
+            match soil {
+                Dirt => color_vec.insert([5,5,5]),
+                Silt => color_vec.insert([100,100,100]),
+                Stone => color_vec.insert([16,16,16]),
+                Gravel => color_vec.insert([32,32,32]),
+                Loam => color_vec.insert([64,64,64]),
+                Clay => color_vec.insert([128,128,128]),
+                Sand => color_vec.insert([200,200,200])
+            }
+        }
+    }
     let colormap = color_reduce::palette::BasePalette::new(
         vec![
             [5,5,5], // dirt
@@ -67,17 +89,11 @@ pub fn init_soilmaker(_base_soil: SoilColor, heightmap: &ImageBuffer<Luma<u8>, V
     old_to_convert.save("soils.png");
 }
 
-fn init_base(soil: SoilColor, size: u32) -> DynamicImage {
-    let mut base_color: [u8; 4] = [5, 5, 5, 255];
-    if let SoilColor::Dirt(color) = soil {
-        base_color = color;
-    } else if let SoilColor::Stone(color) = soil {
-        base_color = color;
-    }
+fn init_base(soil: [u8; 4], size: u32) -> DynamicImage {
     let mut i: DynamicImage = DynamicImage::new_luma8(size, size);
     for x in 0..size {
         for y in 0..size {
-            i.put_pixel(x, y, Rgba::from(base_color));
+            i.put_pixel(x, y, Rgba::from(soil));
         }
     }
     i

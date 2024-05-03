@@ -26,9 +26,32 @@ pub struct VegetationData {
     pub vegetationlist: HashMap<bool, String>
 }
 
-pub fn generate_selected_do(c: &mut CheckBrowser, w: &mut Button, data: &mut VegetationData) {
+// one must create as many as needed
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct VegetationMaps {
+    map: Vec<Vec<u8>>
+}
+
+// TODO: SIGUE EN CONFIG.RS
+
+pub fn generate_selected_do(c: &mut CheckBrowser, w: &mut Button, data: &mut VegetationData, filedata: &mut FileData, soilmap: Vec<u8>) {
     collect_values(c, data);
-    // TODO veg generation
+    let h: ImageBuffer = ImageBuffer::from_raw(filedata.eroded_full, 8192, 8192).unwrap();
+    let h = image_latest::imageops::resize(h, 1024, 1024, FilterType::Nearest);
+    let h = GreyScaleImage::new(h.into_raw().into_iter()
+    .map(|x| x as f64)
+    .collect());
+    let m = Map {
+        biom: TemperateZone,
+        height_map_path: h,
+        texture_map_path: soilmap,
+        height_conversion: 0.2,
+        max_soil_depth: 300.0,
+        pixel_size: 100.0
+    };
+    let conf = SimConfig::from_configs(
+
+    )
 }
 
 pub fn collect_values(w: &mut CheckBrowser, data: &mut VegetationData) {
@@ -38,6 +61,8 @@ pub fn collect_values(w: &mut CheckBrowser, data: &mut VegetationData) {
         data.vegetationlist.insert(w.checked(i as i32), w.text(i as i32).unwrap());
     }
 }
+
+//TODO init soil choice on main to keep track of state
 
 pub fn base_choice_init(w: &mut impl MenuExt) {
     w.add_choice("Dirt");
