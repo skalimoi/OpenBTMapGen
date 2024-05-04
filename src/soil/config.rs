@@ -13,9 +13,9 @@ use crate::soil::hydrology::calculate_hydrology_map;
 use crate::soil::insolation::calculate_actual_insolation;
 use crate::soil::orography::calculate_normal_map;
 use crate::soil::probabilities::calculate_probabilities;
+use crate::soil_def::{VegetationCollection, VegetationMaps};
 
-
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct GreyscaleImage<T> {
     pub image: Vec<T>,
     len: usize,
@@ -112,7 +112,7 @@ pub struct SunConfig {
 
 pub struct SimArgs<'a> {
     pub height_map: GreyscaleImage<f64>,
-    pub soil_ids_map: GreyscaleImage<u8>,
+    pub soil_ids_map: Vec<u8>,
     pub soils: &'a HashMap<u8, Soil>,
     pub sun_config: &'a SunConfig,
     pub reflection_coefficient: f64,
@@ -160,18 +160,18 @@ impl SimConfig {
     }
     pub fn calculate_maps(
         &self,
-        map_name: &str,
         sun_config: &SunConfig,
         reflection_coefficient: f64,
+        mapdata: &mut VegetationMaps
     ) {
         let map = &self.maps;
 
         let height_map_for_insolation = &map.height_map_path.clone();
 
         let soil_ids_map = &map.texture_map_path.clone();
-        );
+
         let sim_args = SimArgs {
-            height_map,
+            height_map: height_map_for_insolation.clone(),
             soil_ids_map: soil_ids_map.clone(),
             soils: &self.soil_ids,
             sun_config,
@@ -186,8 +186,8 @@ impl SimConfig {
             biom: &self.bioms[&map.biom],
         };
         let sim_args_for_insolation = SimArgs {
-            height_map: height_map_for_insolation,
-            soil_ids_map,
+            height_map: height_map_for_insolation.clone(),
+            soil_ids_map: soil_ids_map.clone(),
             soils: &self.soil_ids,
             sun_config,
             reflection_coefficient,
@@ -201,59 +201,15 @@ impl SimConfig {
             biom: &self.bioms[&map.biom],
         };
         let insolation_map = calculate_actual_insolation(&sim_args_for_insolation);
-        let insolation_buffer: ImageBuffer<Luma<u16>, Vec<u16>> = ImageBuffer::from_raw(1024, 1024, insolation_map.image.into_iter().map(
-            |x| {
-                x as u16
-            }
-        ).collect()).unwrap();
-        let insolation_resampled = image_crate::imageops::resize(&insolation_buffer, 8192, 8192, image_crate::imageops::FilterType::Nearest);
-        let insolation_map = GreyscaleImage::new(
-            insolation_resampled.into_raw().into_iter().map(|x| {
-                x as f64
-            }).collect());
         let orographic_map = calculate_normal_map(&sim_args);
         let edaphic_map = calculate_soil_depth(&orographic_map, sim_args.map);
         let hydrology_map = calculate_hydrology_map(&sim_args, &edaphic_map, &insolation_map);
 
+        mapdata.insolation = insolation_map;
+        mapdata.edaphology = edaphic_map;
+        mapdata.hydrology = hydrology_map;
+        mapdata.orography = orographic_map;
         //std::fs::write("insolation_rust.json", serde_json::to_string(&insolation_map.image).unwrap()).unwrap();
-        let mut insolation_image = ImageBuffer::<Luma<u16>, Vec<u16>>::from_raw(
-            insolation_map.len() as u32,
-            insolation_map.len() as u32,
-            insolation_map.image.into_iter().map(|x| x as u16).collect(),
-        )
-            .unwrap();
-        //std::fs::write("edaphic_rust.json", serde_json::to_string(&edaphic_map.image).unwrap()).unwrap();
-        let mut edaphic_image = ImageBuffer::<Luma<u16>, Vec<u16>>::from_raw(
-            edaphic_map.len() as u32,
-            edaphic_map.len() as u32,
-            edaphic_map.image.into_iter().map(|x| x as u16).collect(),
-        )
-            .unwrap();
-        //std::fs::write("hydrology_rust.json", serde_json::to_string(&hydrology_map.image).unwrap()).unwrap();
-        let hydrology_image = ImageBuffer::<Luma<u16>, Vec<u16>>::from_raw(
-            hydrology_map.len() as u32,
-            hydrology_map.len() as u32,
-            hydrology_map.image.into_iter().map(|x| (x * 1000.0) as u16).collect(),
-        )
-            .unwrap();
-
-        // std::fs::create_dir_all(format!("data/vegetation_data/{map_name}")).unwrap();
-
-        insolation_image
-            .save(format!("insolation.png"))
-            .unwrap();
-        edaphic_image
-            .save(format!("edaphic.png"))
-            .unwrap();
-        hydrology_image
-            .save(format!("water.png"))
-            .unwrap();
-
-        std::fs::write(
-            format!("normals.json"),
-            serde_json::to_string(&orographic_map.image.into_iter().map(|x| [x.x, x.y, x.z]).collect::<Vec<_>>()).unwrap(),
-        )
-            .unwrap();
 
         // let orographic_image = ImageBuffer::<Luma<u16>, Vec<u16>>::from_raw(
         //     orographic_map.len() as u32,
@@ -266,59 +222,18 @@ impl SimConfig {
     // TODO: HACER STRUCT SOLO PARA ESTAS IMAGENES Y NO TENER QUE GUARDARLAS
     // TODO: COMPROBAR EL TEMA IMAGEN SI LO COGE BIEN O NO
     // TODO: TERMINAR DE CONFIGURAR SOIL_DEF.RS
-    pub fn calculate_probabilities(&self, map_name: &str, vegetation_names: &[&str], _daylight_hours: i32) {
-        let soil_ids_map = GreyscaleImage::new(
-            ImageReader::open(&self.maps.texture_map_path)
-                .unwrap()
-                .decode()
-                .unwrap()
-                .into_luma8()
-                .into_raw(),
-        );
-        let insolation_map = GreyscaleImage::new(
-            ImageReader::open("insolation.png".to_string())
-                .unwrap()
-                .decode()
-                .unwrap()
-                .into_luma16()
-                .into_raw()
-                .into_iter()
-                .map(|x| x as f64)
-                .collect(),
-        );
-        let edaphic_map = GreyscaleImage::new(
-            ImageReader::open("edaphic.png".to_string())
-                .unwrap()
-                .decode()
-                .unwrap()
-                .into_luma16()
-                .into_raw()
-                .into_iter()
-                .map(|x| x as f64)
-                .collect(),
-        );
-        let hydrology_map = GreyscaleImage::new(
-            ImageReader::open("water.png".to_string())
-                .unwrap()
-                .decode()
-                .unwrap()
-                .into_luma16()
-                .into_raw()
-                .into_iter()
-                .map(|x| x as f64 / 1000.0)
-                .collect(),
-        );
+    pub fn calculate_probabilities(&self, mapdata: &VegetationMaps, vegetation_names: &[&str], _daylight_hours: i32, vegetation_collection: &mut VegetationCollection) {
+        let soil_ids_map = GreyscaleImage::new(self.maps.texture_map_path.clone());
 
         for vegetation in vegetation_names {
             let probabilities_map = calculate_probabilities(
                 &self.vegetations[*vegetation],
                 &soil_ids_map,
                 &self.soil_names,
-                &insolation_map,
-                &edaphic_map,
-                &hydrology_map,
+                &mapdata.insolation,
+                &mapdata.edaphology,
+                &mapdata.hydrology,
             );
-            //std::fs::write("probabilities_rust.json", serde_json::to_string(&probabilities_map.image).unwrap()).unwrap();
             let mut probabilities_image = ImageBuffer::<Luma<u8>, Vec<u8>>::from_raw(
                 probabilities_map.len() as u32,
                 probabilities_map.len() as u32,
@@ -326,24 +241,7 @@ impl SimConfig {
             )
                 .unwrap();
             imageproc::contrast::stretch_contrast_mut(&mut probabilities_image, 100, 255);
-            probabilities_image
-                .save(format!("total_{}.png", vegetation))
-                .unwrap();
+            vegetation_collection.generated.insert(vegetation.clone().parse().unwrap(), probabilities_image.into_raw());
         }
-
-
-        // let to_tiling = image_newest::io::Reader::open(format!("data/vegetation_data/height_map/{vegetation_name}_total.png")).unwrap().decode().unwrap();
-        // let brightened = imageproc::contrast::stretch_contrast(&to_tiling.into_luma8(), 0, 2);
-        // brightened.save(format!("data/vegetation_data/height_map/{vegetation_name}_equalized.png")).unwrap();
-        // let blur = imageproc::filter::gaussian_blur_f32(&brightened, 2.0);
-        // let resampled_blur = image_newest::imageops::resize(&blur, 8193, 8193, FilterType::Gaussian);
-        // let tile_size: usize = 513;
-        // for tile_x in 0..=15 {
-        //     for tile_y in 0..=15 {
-        //         let tile = image_newest::imageops::crop_imm(&resampled_blur, (tile_x * tile_size) as u32, (tile_y * tile_size) as u32, tile_size as u32, tile_size as u32);
-        //         tile.to_image().save(format!("data/vegetation_data/height_map/{vegetation_name}_{tile_x}_{tile_y}.png")).unwrap();
-        //     }
-        // }
-
     }
 }

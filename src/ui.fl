@@ -8,7 +8,7 @@ class UserInterface {open
   } {
     Fl_Window main_window {
       label {OpenBattlesim Map Generator} open
-      xywh {926 357 870 579} type Single color 55 visible
+      xywh {51 237 870 579} type Single color 55 visible
     } {
       Fl_Menu_Bar menu_bar {open
         xywh {-1 0 870 30} color 55
@@ -115,7 +115,7 @@ class UserInterface {open
           }
         }
         Fl_Group hydrography_pane {
-          label Hydrography
+          label Hydrography open
           xywh {0 60 895 520} hide
         } {
           Fl_Group {} {open
@@ -151,21 +151,15 @@ class UserInterface {open
           }
         }
         Fl_Group weather_pane {
-          label Weather
-          xywh {0 60 870 520} hide
+          label Weather open
+          xywh {0 60 870 520}
         } {
           Fl_Group {} {open
             xywh {0 60 870 520} box BORDER_BOX color 7
           } {
-            Fl_Group weather_preview {
-              label {Grid Preview}
-              xywh {28 99 447 446} box BORDER_FRAME color 37 labelcolor 8
-            } {
-              Fl_Box render_target {
-                label label
-                xywh {29 100 445 445} labeltype NO_LABEL
-              }
-            }
+            Fl_Group weather_preview {open selected
+              xywh {28 99 447 446} box BORDER_FRAME color 37 labelcolor 8 align 0
+            } {}
             Fl_Group {} {
               xywh {500 60 370 520} box FLAT_BOX color 7 align 192
             } {
@@ -238,6 +232,14 @@ class UserInterface {open
             Fl_Button wind_mode {
               xywh {503 333 35 35} color 7
             }
+            Fl_Button twod_vis {
+              label 2D
+              xywh {505 467 35 35} color 7
+            }
+            Fl_Button threed_vis {
+              label 3D
+              xywh {505 511 35 35} color 7
+            }
             Fl_Value_Slider day_vis_slider {
               label {Day visualization:}
               xywh {570 197 265 21} type Horizontal color 7 align 1 minimum 1 maximum 360 step 1 textsize 14
@@ -246,48 +248,52 @@ class UserInterface {open
         }
         Fl_Group soil_pane {
           label Soil open
-          xywh {0 60 870 520} color 7
+          xywh {0 60 870 520} color 7 hide
         } {
           Fl_Group {} {open
             xywh {0 60 870 520}
           } {
-            Fl_Box soil_preview {
-              label {Soil map}
-              xywh {15 80 230 230} box BORDER_FRAME color 47 align 1
-            }
-            Fl_Box veg_preview {
-              label {Vegetation previsualization}
-              xywh {15 335 230 230} box BORDER_FRAME color 47 align 1
-            }
             Fl_Box {} {
               label Soil
               xywh {592 62 45 23} box FLAT_BOX color 55 selection_color 55
             }
-            Fl_Button generate_all_button {
-              label {Generate all}
-              xywh {290 498 265 25}
-            }
-            Fl_Button view_selected_button {
-              label {View selected}
-              xywh {290 540 265 25}
-            }
             Fl_Button generate_selected_button {
               label {Generate selected}
-              xywh {290 458 265 25}
+              xywh {290 537 265 25}
             }
             Fl_Box {} {
               label {Note: Only 1 vegetation map can be displayed at a time.}
-              xywh {290 399 265 41} box FLAT_BOX align 128
+              xywh {290 483 265 41} box FLAT_BOX align 128
             }
             Fl_Box {} {
               label {Loaded vegetation definitions:}
               xywh {595 336 190 22}
             }
-            Fl_Box legend_box_soil {selected
+            Fl_Box legend_box_soil {
               xywh {290 81 145 229}
             }
             Fl_Check_Browser vegetation_list {
               xywh {595 360 265 205}
+            }
+            Fl_Box veg_name {
+              label {Now displaying: []}
+              xywh {290 450 265 25}
+            }
+            Fl_Group {} {
+              label {Soil preview} open
+              xywh {15 85 235 475}
+            } {
+              Fl_Box soil_preview {
+                xywh {15 87 230 230}
+              }
+            }
+            Fl_Group {} {
+              label {Soil preview} open
+              xywh {12 337 235 230}
+            } {
+              Fl_Box veg_preview {
+                xywh {12 337 235 13}
+              }
             }
           }
           Fl_Group soil_opts_group {open
@@ -334,6 +340,10 @@ class UserInterface {open
               xywh {640 288 176 25}
             }
           }
+          Fl_Button next_veg {
+            label Next
+            xywh {355 415 130 25}
+          }
         }
       }
     }
@@ -346,7 +356,7 @@ class UserInterface {open
     } {
       Fl_Window heightmap_dialog_win {
         label {Heightmap importer} open
-        xywh {1503 580 425 114} type Single color 55 visible
+        xywh {1487 580 425 114} type Single color 55 hide
       } {
         Fl_Button import_button {
           label Import

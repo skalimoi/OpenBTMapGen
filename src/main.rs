@@ -1,9 +1,11 @@
 #![feature(vec_push_within_capacity)]
+#![feature(iter_advance_by)]
 
+use std::collections::HashMap;
 use crate::topo_settings::TopoSettings;
 use fltk::app::Sender;
 use map_range::MapRange;
-use fltk::image::SharedImage;
+use fltk::image::{RgbImage, SharedImage};
 use fltk::{*, prelude::*};
 use image_crate::{DynamicImage, EncodableLayout, GenericImageView, ImageBuffer, Luma, Pixel};
 use noise::utils::NoiseMapBuilder;
@@ -17,6 +19,7 @@ use std::default::Default;
 use std::fs::File;
 use std::fs;
 use std::mem::{replace, swap};
+use std::ops::Index;
 use std::path::PathBuf;
 use fastlem::core::units::Elevation;
 
@@ -29,7 +32,9 @@ use topo_settings::NoiseTypesUi;
 use topography::{DEFAULT_TOPOSETTINGS, DIMENSIONS};
 use weather_pane::DEFAULT_WEATHERSETTINGS;
 use crate::fastlem_opt::generate_terrain;
-use crate::soil_def::{base_choice_init, load_and_show_veg};
+use crate::soil::config::GreyscaleImage;
+use crate::soil::soilmaker::init_soilmaker;
+use crate::soil_def::{base_choice_init, generate_selected_do, load_and_show_veg, SoilType, VegetationCollection, VegetationData, VegetationMaps};
 use crate::topography::{max_bounds_do, min_bounds_do, lod_do, erod_scale_do, apply_color_eroded, apply_color};
 use crate::ui::HeightmapInterface;
 use crate::utils::get_height;
@@ -114,6 +119,18 @@ enum Message {
     ImportHeightmap,
     FullPreviewIncremental,
     FullPreviewSingular,
+    GenVegSel,
+    GenSoil,
+    DirtCheck,
+    LoamCheck,
+    StoneCheck,
+    GravelCheck,
+    SiltCheck,
+    SandCheck,
+    ClayCheck,
+    NextVeg,
+    Vis2D,
+    Vis3D,
 }
 
 struct ViewState {
@@ -123,9 +140,10 @@ struct ViewState {
     proj: ViewMode
 }
 
+#[derive(PartialEq)]
 enum ViewMode {
-    2D,
-    3D
+    TwoD,
+    ThreeD
 }
 
 
@@ -315,7 +333,7 @@ fn main() {
         mode: Init,
         hour: 0,
         layer: 0,
-        proj: ViewMode::3D
+        proj: ViewMode::ThreeD
     };
 
     let climates: [Climate; 18] = [koppen_cfa(), koppen_cfb(), koppen_cfc(), koppen_dfb(), koppen_dfc(), koppen_dfa(), koppen_cwc(), koppen_cwb(), koppen_cwa(), koppen_et(), koppen_afam(), koppen_as(), koppen_aw(), koppen_dsc(), koppen_bsh(), koppen_bsk(), koppen_bwh(), koppen_bwk()];
@@ -469,7 +487,7 @@ fn main() {
         terrain_material.clone(),
         Arc::new(
             move |x, y| {
-                *heightmap_opt.get_pixel(x as u32, y as u32).channels().first().unwrap() as f32 * 0.01
+                *heightmap_opt.get_pixel(x as u32, y as u32).channels().first().unwrap() as f32 * 0.001
             }
         ),
         512.0,
@@ -576,6 +594,24 @@ fn main() {
 
     ui.layer_slider.emit(s, Message::Layer);
 
+    ui.generate_selected_button.emit(s, Message::GenVegSel);
+
+    ui.prepare_soil_button.emit(s, Message::GenSoil);
+
+    ui.dirt_check.emit(s, Message::DirtCheck);
+
+    ui.loam_check.emit(s, Message::LoamCheck);
+
+    ui.silt_check.emit(s, Message::SiltCheck);
+
+    ui.clay_check.emit(s, Message::ClayCheck);
+
+    ui.stone_check.emit(s, Message::StoneCheck);
+
+    ui.sand_check.emit(s, Message::SandCheck);
+
+    ui.gravel_check.emit(s, Message::GravelCheck);
+
     let target = *camera.target();
 
     let camera_y = camera.position().y;
@@ -588,16 +624,178 @@ fn main() {
     heightmap_importer_ui.browse_button.emit(s, Message::BrowseFile);
     heightmap_importer_ui.import_button.emit(s, Message::ImportButton);
     heightmap_importer_ui.file_box.emit(s, Message::FileBox);
+
+    ui.twod_vis.emit(s, Message::Vis2D);
+    ui.threed_vis.emit(s, Message::Vis3D);
     
     base_choice_init(&mut ui.base_soil_choice);
     load_and_show_veg(&mut ui.vegetation_list);
-    
+
+    let mut soilchoices: HashMap<SoilType, bool> = HashMap::new();
+    soilchoices.insert(SoilType::Dirt, false);
+    soilchoices.insert(SoilType::Silt, false);
+    soilchoices.insert(SoilType::Stone, false);
+    soilchoices.insert(SoilType::Gravel, false);
+    soilchoices.insert(SoilType::Loam, false);
+    soilchoices.insert(SoilType::Clay, false);
+    soilchoices.insert(SoilType::Sand, false);
+
+    let mut vegmaps = VegetationMaps {
+      insolation: GreyscaleImage::new(vec![]),
+        edaphology: GreyscaleImage::new(vec![]),
+        hydrology: GreyscaleImage::new(vec![]),
+        orography: GreyscaleImage::new(vec![]),
+        soil_int: vec![]
+    };
+
+    let mut soil_veg_params = VegetationData {
+        base: SoilType::Dirt,
+        blocklist: soilchoices,
+        vegetationlist: HashMap::new()
+    };
+
+    let mut veg_collection = VegetationCollection {
+        generated: HashMap::new(),
+    };
 
     let mut dir: PathBuf = PathBuf::new();
+
+    ui.next_veg.emit(s, Message::NextVeg);
+
+    let mut index_list: Vec<String> = Vec::new();
+
+    let mut index = 0;
 
     while app.wait() {
         if let Some(msg) = r.recv() {
             match msg {
+                Message::Vis2D => {
+                    view_state.proj = ViewMode::TwoD;
+                    gl_widget.hide();
+                }
+                Message::Vis3D => {
+                    view_state.proj = ViewMode::ThreeD;
+                    gl_widget.show();
+                }
+                Message::NextVeg => {
+                    index+=1;
+                    let element = index_list[index-1].clone();
+                    let map = veg_collection.clone().generated.get(&element).unwrap().clone();
+                    let i = RgbImage::new(map.as_slice(), 1024, 1024, ColorDepth::Rgb8).unwrap();
+                    ui.veg_preview.set_image_scaled(None::<SharedImage>);
+                    ui.veg_preview.set_image_scaled(SharedImage::from_image(i).ok());
+                    ui.veg_preview.redraw();
+                    ui.veg_name.set_label(format!("Now displaying: {}", element).as_str());
+                }
+                Message::GenVegSel => {
+                    generate_selected_do(&mut ui.vegetation_list, &mut vegmaps, &mut soil_veg_params, &mut file, &mut veg_collection);
+                    for element in veg_collection.clone().generated.into_iter() {
+                        let name = element.0.clone();
+                        index_list.push(name);
+                    }
+                }
+                Message::DirtCheck => {
+                    match ui.dirt_check.is_checked() {
+                        true => {
+                            let value = soil_veg_params.blocklist.get_mut(&SoilType::Dirt).unwrap();
+                            replace(value, true);
+                        }
+                        false => {
+                            let value = soil_veg_params.blocklist.get_mut(&SoilType::Dirt).unwrap();
+                            replace(value, false);
+                        }
+                    }
+                }
+                Message::SiltCheck => {
+                    match ui.silt_check.is_checked() {
+                        true => {
+                            let value = soil_veg_params.blocklist.get_mut(&SoilType::Silt).unwrap();
+                            replace(value, true);
+                        }
+                        false => {
+                            let value = soil_veg_params.blocklist.get_mut(&SoilType::Silt).unwrap();
+                            replace(value, false);
+                        }
+                    }
+                }
+                Message::StoneCheck => {
+                    match ui.stone_check.is_checked() {
+                        true => {
+                            let value = soil_veg_params.blocklist.get_mut(&SoilType::Stone).unwrap();
+                            replace(value, true);
+                        }
+                        false => {
+                            let value = soil_veg_params.blocklist.get_mut(&SoilType::Stone).unwrap();
+                            replace(value, false);
+                        }
+                    }
+                }
+                Message::GravelCheck => {
+                    match ui.gravel_check.is_checked() {
+                        true => {
+                            let value = soil_veg_params.blocklist.get_mut(&SoilType::Gravel).unwrap();
+                            replace(value, true);
+                        }
+                        false => {
+                            let value = soil_veg_params.blocklist.get_mut(&SoilType::Gravel).unwrap();
+                            replace(value, false);
+                        }
+                    }
+                }
+                Message::LoamCheck => {
+                    match ui.loam_check.is_checked() {
+                        true => {
+                            let value = soil_veg_params.blocklist.get_mut(&SoilType::Loam).unwrap();
+                            replace(value, true);
+                        }
+                        false => {
+                            let value = soil_veg_params.blocklist.get_mut(&SoilType::Loam).unwrap();
+                            replace(value, false);
+                        }
+                    }
+                }
+                Message::ClayCheck => {
+                    match ui.clay_check.is_checked() {
+                        true => {
+                            let value = soil_veg_params.blocklist.get_mut(&SoilType::Clay).unwrap();
+                            replace(value, true);
+                        }
+                        false => {
+                            let value = soil_veg_params.blocklist.get_mut(&SoilType::Clay).unwrap();
+                            replace(value, false);
+                        }
+                    }
+                }
+                Message::SandCheck => {
+                    match ui.sand_check.is_checked() {
+                        true => {
+                            let value = soil_veg_params.blocklist.get_mut(&SoilType::Sand).unwrap();
+                            replace(value, true);
+                        }
+                        false => {
+                            let value = soil_veg_params.blocklist.get_mut(&SoilType::Sand).unwrap();
+                            replace(value, false);
+                        }
+                    }
+                }
+                Message::GenSoil => {
+                    let soil_base = match ui.base_soil_choice.choice().unwrap().as_str() {
+                        "Dirt" => SoilType::Dirt,
+                        "Silt" => SoilType::Silt,
+                        "Stone" => SoilType::Stone,
+                        "Gravel" => SoilType::Gravel,
+                        "Loam" => SoilType::Loam,
+                        "Clay" => SoilType::Clay,
+                        "Sand" => SoilType::Sand,
+                        _ => SoilType::Dirt
+                    };
+                    let i: ImageBuffer<Luma<u16>, Vec<u16>> = ImageBuffer::from_raw(8192, 8192, file.eroded_full.clone()).unwrap();
+                    let hydro: ImageBuffer<Luma<u8>, Vec<u8>> = ImageBuffer::from_raw(8192, 8192, file.discharge.clone()).unwrap();
+                    let soil = init_soilmaker(&mut ui.soil_preview, soil_base, &soil_veg_params.blocklist, &i, &hydro);
+                    vegmaps.soil_int = soil;
+                    ui.soil_preview.set_image_scaled(None::<SharedImage>);
+                    ui.soil_preview.set_image_scaled(SharedImage::from_image(RgbImage::new(vegmaps.soil_int.as_slice(), 1024, 1024, ColorDepth::Rgb8).unwrap()).ok());
+                }
                 Message::ImportHeightmap => {
                     heightmap_importer_win.show();
                 }
@@ -659,6 +857,7 @@ fn main() {
                     hydro::update_hydro_prev(&mut ui.hydro_mask_preview, false, &mut file);
                 }
                 Message::FullPreviewSingular => {
+                    println!("Is empty: {}", file.raw_full.is_empty());
                     hydro::erode_heightmap_full(&mut file, false);
                     hydro::update_hydro_prev(&mut ui.hydro_preview, true, &mut file);
                     hydro::update_hydro_prev(&mut ui.hydro_mask_preview, false, &mut file);
@@ -686,9 +885,11 @@ fn main() {
                         _ => view_state.layer = 0
                     }
                     match view_state.proj {
-                        ViewMode::3D => weather_pane::update_grid_at_time(view_state.hour, &mut file.weather_data, &mut mesh_v, &view_state);
-                        ViewMode::2D => weather_pane::vis_image(&mut ui.putframehere, view_state.hour, &mut file.weather_data, &view_state);
-                    }
+                        ViewMode::ThreeD => {weather_pane::update_grid_at_time(view_state.hour, & mut file.weather_data, & mut mesh_v, & view_state);},
+                        ViewMode::TwoD => {
+                            weather_pane::vis_image( &mut ui.weather_preview, view_state.hour, & mut file.weather_data, & view_state);
+                        }
+                    };
                     
                 }
                 Message::WeatherSeedInput => {
@@ -709,20 +910,22 @@ fn main() {
                 Message::GenWeather => {
                     let noise: Fbm<Perlin> = Fbm::new(file.weather.seed.unwrap());
                     let map: ImageBuffer<Luma<u16>, Vec<u16>> = ImageBuffer::from_raw(512, 512, file.eroded_raw_512.clone()).unwrap();
-                    let map_b = map.clone();
-                    let terrain_map = Terrain::new(
-                        &context,
-                        terrain_material.clone(),
-                        Arc::new(
-                            move |x, y| {
-                                map_b.clone().get_pixel(x as u32, y as u32).channels().first().unwrap().clone() as f32 * 0.01
-                            }
-                        ),
-                        512.0,
-                        1.0,
-                        three_d::prelude::Vec2::new(255.0, 255.0)
-                    );
-                    terrain = terrain_map;
+                    if view_state.proj != ViewMode::TwoD {
+                        let map_b = map.clone();
+                        let terrain_map = Terrain::new(
+                            &context,
+                            terrain_material.clone(),
+                            Arc::new(
+                                move |x, y| {
+                                    *map_b.clone().get_pixel(x as u32, y as u32).channels().first().unwrap() as f32 * 0.1
+                                }
+                            ),
+                            512.0,
+                            1.0,
+                            three_d::prelude::Vec2::new(255.0, 255.0),
+                        );
+                        terrain = terrain_map;
+                    }
                     let component_size = 512.0 / file.weather.clone().grid_size as f64;
                     let min_total = map.iter().as_slice().iter().min().unwrap();
                     let max_total = map.iter().as_slice().iter().max().unwrap();
@@ -752,8 +955,8 @@ fn main() {
                 Message::ViewHumidity => {
                     weather_pane::set_view_state(&mut view_state, WeatherVisualization::Humidity);
                     match view_state.proj {
-                        ViewMode::3D => weather_pane::update_grid_at_time(view_state.hour, &mut file.weather_data, &mut mesh_v, &view_state);
-                        ViewMode::2D => weather_pane::vis_image(&mut ui.putframehere, view_state.hour, &mut file.weather_data, &view_state);
+                        ViewMode::ThreeD => { weather_pane::update_grid_at_time(view_state.hour, &mut file.weather_data, &mut mesh_v, &view_state); },
+                        ViewMode::TwoD => { weather_pane::vis_image(&mut ui.weather_preview, view_state.hour, &mut file.weather_data, &view_state); }
                     }
                     ui.legend_box.set_image(Some(SharedImage::load("icons/humidity_legend.png").unwrap()));
                     ui.legend_box.redraw_label();
@@ -761,8 +964,8 @@ fn main() {
                 Message::ViewPressure => {
                     weather_pane::set_view_state(&mut view_state, WeatherVisualization::Pressure);
                     match view_state.proj {
-                        ViewMode::3D => weather_pane::update_grid_at_time(view_state.hour, &mut file.weather_data, &mut mesh_v, &view_state);
-                        ViewMode::2D => weather_pane::vis_image(&mut ui.putframehere, view_state.hour, &mut file.weather_data, &view_state);
+                        ViewMode::ThreeD => { weather_pane::update_grid_at_time(view_state.hour, &mut file.weather_data, &mut mesh_v, &view_state); },
+                        ViewMode::TwoD => { weather_pane::vis_image(&mut ui.weather_preview, view_state.hour, &mut file.weather_data, &view_state); }
                     }
                     ui.legend_box.set_image(Some(SharedImage::load("icons/pressure_legend.png").unwrap()));
                     ui.legend_box.redraw_label();
@@ -770,8 +973,8 @@ fn main() {
                 Message::ViewTemperature => {
                     weather_pane::set_view_state(&mut view_state, WeatherVisualization::Temperature);
                     match view_state.proj {
-                        ViewMode::3D => weather_pane::update_grid_at_time(view_state.hour, &mut file.weather_data, &mut mesh_v, &view_state);
-                        ViewMode::2D => weather_pane::vis_image(&mut ui.putframehere, view_state.hour, &mut file.weather_data, &view_state);
+                        ViewMode::ThreeD => { weather_pane::update_grid_at_time(view_state.hour, &mut file.weather_data, &mut mesh_v, &view_state); },
+                        ViewMode::TwoD => { weather_pane::vis_image(&mut ui.weather_preview, view_state.hour, &mut file.weather_data, &view_state); }
                     }
                     ui.legend_box.set_image(Some(SharedImage::load("icons/temp_legend.png").unwrap()));
                     ui.legend_box.redraw_label();
@@ -779,16 +982,16 @@ fn main() {
                 Message::ViewWind => {
                     weather_pane::set_view_state(&mut view_state, WeatherVisualization::Wind);
                     match view_state.proj {
-                        ViewMode::3D => weather_pane::update_grid_at_time(view_state.hour, &mut file.weather_data, &mut mesh_v, &view_state);
-                        ViewMode::2D => weather_pane::vis_image(&mut ui.putframehere, view_state.hour, &mut file.weather_data, &view_state);
-                    }
+                        ViewMode::ThreeD => { weather_pane::update_grid_at_time(view_state.hour, &mut file.weather_data, &mut mesh_v, &view_state); },
+                        ViewMode::TwoD => { weather_pane::vis_image(&mut ui.weather_preview, view_state.hour, &mut file.weather_data, &view_state); }
+                    };
                 },
                 Message::DaySlider => {
                     weather_pane::set_hour(&mut ui.day_vis_slider, &mut view_state);
                     match view_state.proj {
-                        ViewMode::3D => weather_pane::update_grid_at_time(view_state.hour, &mut file.weather_data, &mut mesh_v, &view_state);
-                        ViewMode::2D => weather_pane::vis_image(&mut ui.putframehere, view_state.hour, &mut file.weather_data, &view_state);
-                    }
+                        ViewMode::ThreeD => { weather_pane::update_grid_at_time(view_state.hour, &mut file.weather_data, &mut mesh_v, &view_state); },
+                        ViewMode::TwoD => { weather_pane::vis_image(&mut ui.weather_preview, view_state.hour, &mut file.weather_data, &view_state); }
+                    };
                 }
                 Message::SaveFile => {
                     save_file_do(&mut file, &mut is_file_workspace, &mut workspace_path, &mut file_name);

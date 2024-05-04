@@ -5,10 +5,14 @@ use std::ops::Deref;
 use fltk::browser::CheckBrowser;
 use fltk::button::Button;
 use fltk::prelude::{BrowserExt, MenuExt};
+use image_newest::{ImageBuffer, Luma};
+use image_newest::imageops::FilterType;
+use nalgebra::Vector3;
 use serde::{Deserialize, Serialize};
-use crate::soil::config::Vegetation;
+use crate::FileData;
+use crate::soil::config::{Biom, GreyscaleImage, Map, SimConfig, Soil, SunConfig, Vegetation};
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq, Hash)]
 pub enum SoilType {
     Dirt,
     Silt,
@@ -22,47 +26,78 @@ pub enum SoilType {
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct VegetationData {
     pub base: SoilType,
-    pub blocklist: HashMap<bool, SoilType>,
-    pub vegetationlist: HashMap<bool, String>
+    pub blocklist: HashMap<SoilType, bool>,
+    pub vegetationlist: HashMap<String, bool>
 }
 
-// one must create as many as needed
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone)]
 pub struct VegetationMaps {
-    map: Vec<Vec<u8>>
+    pub insolation: GreyscaleImage<f64>,
+    pub edaphology: GreyscaleImage<f64>,
+    pub hydrology: GreyscaleImage<f64>,
+    pub orography: GreyscaleImage<Vector3<f64>>,
+    pub soil_int: Vec<u8>
 }
 
-// TODO: SIGUE EN CONFIG.RS
+#[derive(Clone)]
+pub struct VegetationCollection {
+    pub generated: HashMap<String, Vec<u8>>
+}
 
-pub fn generate_selected_do(c: &mut CheckBrowser, w: &mut Button, data: &mut VegetationData, filedata: &mut FileData, soilmap: Vec<u8>) {
-    collect_values(c, data);
-    let h: ImageBuffer = ImageBuffer::from_raw(filedata.eroded_full, 8192, 8192).unwrap();
-    let h = image_latest::imageops::resize(h, 1024, 1024, FilterType::Nearest);
-    let h = GreyScaleImage::new(h.into_raw().into_iter()
+pub fn generate_selected_do(c: &mut CheckBrowser, vegetation_maps: &mut VegetationMaps, vegdata: &mut VegetationData, filedata: &mut FileData, vegetation_collection: &mut VegetationCollection) {
+    collect_values(c, vegdata);
+    let h: ImageBuffer<Luma<u16>, Vec<u16>> = ImageBuffer::from_raw(8192, 8192, filedata.eroded_full.clone()).unwrap();
+    let h = image_newest::imageops::resize(&h, 1024, 1024, FilterType::Nearest);
+    let h = GreyscaleImage::new(h.into_raw().into_iter()
     .map(|x| x as f64)
     .collect());
     let m = Map {
-        biom: TemperateZone,
+        biom: "TemperateZone".parse().unwrap(),
         height_map_path: h,
-        texture_map_path: soilmap,
-        height_conversion: 0.2,
+        texture_map_path: vegetation_maps.clone().soil_int,
+        height_conversion: 1.0,
         max_soil_depth: 300.0,
         pixel_size: 100.0
     };
-    let conf = SimConfig::from_configs(
+    let mut data = String::new();
+    File::open("bioms.yml").unwrap().read_to_string(&mut data).unwrap();
+    let bioms: HashMap<String, Biom> = serde_yaml::from_str(&data).unwrap();
 
-    )
+    let mut data = String::new();
+    File::open("soil_types.yml").unwrap().read_to_string(&mut data).unwrap();
+    let soils: HashMap<String, Soil> = serde_yaml::from_str(&data).unwrap();
+    let mut data = String::new();
+    File::open("vegetation_types.yaml")
+        .unwrap()
+        .read_to_string(&mut data)
+        .unwrap();
+    let vegetations: HashMap<String, Vegetation> = serde_yaml::from_str(&data).unwrap();
+    let sun_config = SunConfig { // sample parameters for Hellion
+        daylight_hours: 13,
+        sun_start_elevation: -5.0,
+        sun_start_azimuth: 92.0,
+        sun_max_elevation: 50.0,
+    };
+    let sim_config = SimConfig::from_configs(m, bioms, soils, vegetations);
+    let mut to_be_generated: Vec<&str> = Vec::new();
+    for (vegetation, status) in &vegdata.vegetationlist {
+        if status.clone() == true {
+            to_be_generated.push(vegetation.as_str());
+        }
+    }
+    let reflection_coefficient = 0.1;
+    sim_config.calculate_maps(&sun_config, reflection_coefficient, vegetation_maps);
+    sim_config.calculate_probabilities(vegetation_maps, to_be_generated.as_slice(), sun_config.daylight_hours, vegetation_collection);
 }
 
+// TODO falla aquí - option none dice
 pub fn collect_values(w: &mut CheckBrowser, data: &mut VegetationData) {
     let nitems = w.nitems();
     for i in 0..nitems {
         data.vegetationlist.clear();
-        data.vegetationlist.insert(w.checked(i as i32), w.text(i as i32).unwrap());
+        data.vegetationlist.insert(w.text(i as i32).unwrap(), w.checked(i as i32));
     }
 }
-
-//TODO init soil choice on main to keep track of state
 
 pub fn base_choice_init(w: &mut impl MenuExt) {
     w.add_choice("Dirt");

@@ -1,3 +1,4 @@
+use image_crate::{ImageBuffer, Luma};
 use nalgebra::Vector3;
 use crate::soil::config::{clamp_idx, GreyscaleImage, Map, round, SimArgs, Sun};
 
@@ -114,8 +115,8 @@ pub fn calculate_actual_insolation(sim_args: &SimArgs) -> GreyscaleImage<f64> {
             let cloud_reflection_loss = pixel_raw_insolation * sim_args.biom.cloud_reflection / 100.0;
             let atmospheric_absorption_loss = pixel_raw_insolation * sim_args.biom.atmospheric_absorption / 100.0;
             let atmospheric_diffusion_loss = pixel_raw_insolation * sim_args.biom.atmospheric_diffusion / 100.0;
-            let soil = &sim_args.soils[&sim_args.soil_ids_map[(x, y)]];
-            insolation_map[(x, y)] =
+            let soil_map: ImageBuffer<Luma<u8>, Vec<u8>> = ImageBuffer::from_raw(1024, 1024, sim_args.soil_ids_map.clone()).unwrap();
+            let soil = &sim_args.soils[&soil_map.get_pixel(x as u32, y as u32)[0]];            insolation_map[(x, y)] =
                 (pixel_raw_insolation - cloud_reflection_loss - atmospheric_absorption_loss - atmospheric_diffusion_loss)
                     * (1.0 - soil.albedo)
         }

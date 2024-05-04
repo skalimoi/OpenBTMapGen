@@ -5,8 +5,13 @@ use std::io::Read;
 use imageproc::drawing::Canvas;
 use color_reduce;
 use color_reduce::{quantize, BasePalette, QuantizeMethod};
+use fltk::enums::ColorDepth;
+use fltk::frame::Frame;
+use fltk::image::{PngImage, RgbImage, SharedImage};
+use fltk::prelude::WidgetExt;
 use image_crate::{ColorType, DynamicImage, GenericImage, ImageBuffer, Luma, Rgb, Rgba};
 use image_crate::DynamicImage::{ImageLuma16, ImageLuma8, ImageRgb8, ImageRgba8};
+use image_crate::imageops::FilterType;
 use image_newest::{ImageBuffer as buffer_old, Rgb as Rgb_old, Rgba as Rgba_old};
 use imageproc::distance_transform::Norm;
 
@@ -14,6 +19,7 @@ use noise::{Fbm, MultiFractal, Perlin};
 use noise::utils::{NoiseMap, NoiseMapBuilder, PlaneMapBuilder};
 use rand::{Rng, thread_rng};
 use crate::soil::config::{Biom, GreyscaleImage, Map, SimConfig, Soil, SunConfig, Vegetation};
+use crate::soil_def::SoilType;
 
 const DIM: u16 = 8192;
 
@@ -31,18 +37,18 @@ pub enum SoilColor {
     Sand([u8; 4])
 }
 
-pub fn init_soilmaker(base_soil: SoilType, blocklist: &HashMap<bool, SoilType>, heightmap: &ImageBuffer<Luma<u8>, Vec<u8>>, heightmap16: &ImageBuffer<Luma<u16>, Vec<u16>>, hydro_map: &ImageBuffer<Luma<u8>, Vec<u8>>) {
-    let mut dynamic = DynamicImage::ImageLuma8(heightmap.clone());
+pub fn init_soilmaker(f: &mut Frame, base_soil: SoilType, blocklist: &HashMap<SoilType, bool>, heightmap16: &ImageBuffer<Luma<u16>, Vec<u16>>, hydro_map: &ImageBuffer<Luma<u8>, Vec<u8>>) -> Vec<u8> {
+    let mut dynamic = DynamicImage::ImageLuma16(heightmap16.clone());
     let mut dynamic_hydro = DynamicImage::ImageLuma8(hydro_map.clone());
     println!("Doing base soil.");
     let b = init_base(match base_soil {
-        Dirt => [5,5,5],
-        Silt => [100,100,100],
-        Stone => [16,16,16],
-        Gravel => [32,32,32],
-        Loam => [64,64,64],
-        Clay => [128,128,128],
-        Sand => [200,200,200]
+        SoilType::Dirt => [5,5,5,255],
+        SoilType::Silt => [100,100,100, 255],
+        SoilType::Stone => [16,16,16, 255],
+        SoilType::Gravel => [32,32,32, 255],
+        SoilType::Loam => [64,64,64, 255],
+        SoilType::Clay => [128,128,128, 255],
+        SoilType::Sand => [200,200,200, 255]
     }, DIM as u32);
     println!("Doing height.");
     let h = generate_height(&mut dynamic);
@@ -60,33 +66,30 @@ pub fn init_soilmaker(base_soil: SoilType, blocklist: &HashMap<bool, SoilType>, 
     let c = generate_coast_sediment(&mut dynamic);
     let d_5 = overlay_with_weights(&d_4, &c, 1.0);
     let mut old_to_convert: buffer_old<Rgb_old<u8>, Vec<u8>> = buffer_old::from_raw(DIM as u32, DIM as u32, d_5.into_rgb8().into_raw()).unwrap();
-    let mut color_vec: Vec<[u8; 4]> = vec![];
-    for (value, soil) in blocklist {
-        if value == true {
+    let mut color_vec: Vec<[u8; 3]> = vec![];
+    for (soil, value) in blocklist.clone() {
+        if value == false {
             match soil {
-                Dirt => color_vec.insert([5,5,5]),
-                Silt => color_vec.insert([100,100,100]),
-                Stone => color_vec.insert([16,16,16]),
-                Gravel => color_vec.insert([32,32,32]),
-                Loam => color_vec.insert([64,64,64]),
-                Clay => color_vec.insert([128,128,128]),
-                Sand => color_vec.insert([200,200,200])
+                SoilType::Dirt => color_vec.push([5,5,5]),
+                SoilType::Silt => color_vec.push([100,100,100]),
+                SoilType::Stone => color_vec.push([16,16,16]),
+                SoilType::Gravel => color_vec.push([32,32,32]),
+                SoilType::Loam => color_vec.push([64,64,64]),
+                SoilType::Clay => color_vec.push([128,128,128]),
+                SoilType::Sand => color_vec.push([200,200,200])
             }
         }
     }
     let colormap = color_reduce::palette::BasePalette::new(
-        vec![
-            [5,5,5], // dirt
-            [16,16,16], // stone
-            [32,32,32], // gravel
-            [64,64,64], // loam
-            [100,100,100], // silt
-            [128,128,128], // clay
-            [200,200,200]  // sand
-        ]
+        color_vec
     );
     quantize(&mut old_to_convert, &colormap, QuantizeMethod::CIE2000, None);
-    old_to_convert.save("soils.png");
+    let i = image_newest::imageops::resize(&old_to_convert, 1024, 1024, image_newest::imageops::FilterType::Nearest);
+    f.set_image_scaled(None::<SharedImage>);
+    let s = RgbImage::new(i.as_raw().as_slice(), 1024, 1024, ColorDepth::Rgb8).unwrap();
+    f.set_image(SharedImage::from_image(s).ok());
+    f.redraw();
+    i.into_raw()
 }
 
 fn init_base(soil: [u8; 4], size: u32) -> DynamicImage {
@@ -145,7 +148,6 @@ fn generate_random_clay(i: &mut DynamicImage) -> DynamicImage {
 fn generate_slope_soil(i: &ImageBuffer<Luma<u16>, Vec<u16>>) -> DynamicImage {
     let c = sobel(i);
     c.adjust_contrast(50.0).brighten(50);
-    c.save("SOBEL.png");
     let mut d = DynamicImage::new_luma_a8(i.dimensions().0, i.dimensions().0);
     // TODO: change gravel for nothing
     for x in 0..i.dimensions().0 {
@@ -277,57 +279,4 @@ fn sobel(input: &ImageBuffer<Luma<u16>, Vec<u16>>) -> DynamicImage {
         }
     };
     ImageLuma16(buff)
-}
-
-pub fn generate_yaml_map(biom: &str, height_conversion: f64, height_map_path: &str, max_soil_depth: f64, pixel_size: f64, texture_map_path: f64) {
-    let map = Map {
-        biom: biom.to_string(),
-        height_conversion: height_conversion as f64,
-        height_map_path: height_map_path.to_string(),
-        max_soil_depth: max_soil_depth as f64,
-        pixel_size: pixel_size as f64,
-        texture_map_path: texture_map_path.to_string()
-    };
-    let yaml = serde_yaml::to_string(&map).unwrap();
-    File::create("map.yml").unwrap();
-    fs::write("map.yml", yaml).unwrap();
-}
-
-pub fn generate_veg_mask(map_name: &str, vegetation: &[&str]) {
-    
-    let maps = Map {
-        biom: "PolarZone".to_string(),
-        height_map_path: "heightmap.png".to_string(),
-        texture_map_path: "soils.png".to_string(),
-        height_conversion: 1.0,
-        max_soil_depth: 700.0,
-        pixel_size: 100.0,
-    };
-
-    let mut data = String::new();
-    File::open("bioms.yml").unwrap().read_to_string(&mut data).unwrap();
-    let bioms: HashMap<String, Biom> = serde_yaml::from_str(&data).unwrap();
-
-    let mut data = String::new();
-    File::open("soil_types.yml").unwrap().read_to_string(&mut data).unwrap();
-    let soils: HashMap<String, Soil> = serde_yaml::from_str(&data).unwrap();
-
-    let mut data = String::new();
-    File::open("vegetation_types.yaml")
-        .unwrap()
-        .read_to_string(&mut data)
-        .unwrap();
-    let vegetations: HashMap<String, Vegetation> = serde_yaml::from_str(&data).unwrap();
-
-    let sun_config = SunConfig { // sample parameters for Hellion
-        daylight_hours: 13,
-        sun_start_elevation: -5.0,
-        sun_start_azimuth: 92.0,
-        sun_max_elevation: 50.0,
-    };
-    let reflection_coefficient = 0.1;
-
-    let sim_config = SimConfig::from_configs(maps, bioms, soils, vegetations);
-    // sim_config.calculate_maps(map_name.to_string().as_str(), &sun_config, reflection_coefficient); // TODO put back
-    sim_config.calculate_probabilities(map_name.to_string().as_str(), vegetation, sun_config.daylight_hours);
 }

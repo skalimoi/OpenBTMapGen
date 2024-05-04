@@ -18,8 +18,16 @@ pub fn erode_heightmap_full(file: &mut FileData, incremental_or_singular: bool) 
     if !incremental_or_singular {
         let mut discharge_map = vec![0; 8192 * 8192];
 
-        let img: ImageBuffer<Luma<u16>, Vec<u16>> = ImageBuffer::from_raw(8192, 8192, file.clone().raw_full).unwrap();
+        let mut img: ImageBuffer<Luma<u16>, Vec<u16>> = ImageBuffer::default();
+        
+        if file.raw_full.is_empty() {
+            let n: ImageBuffer<Luma<u16>, Vec<u16>> = ImageBuffer::from_raw(512, 512, file.clone().raw_map_512).unwrap();
+            img = image_crate::imageops::resize(&n, 8192, 8192, FilterType::CatmullRom);
 
+        } else {
+            let i: ImageBuffer<Luma<u16>, Vec<u16>> = ImageBuffer::from_raw(8192, 8192, file.clone().raw_full).unwrap();
+            img = i;
+        }
         let heightmap = img.into_raw();
 
         let mut erosion_world = World::new(

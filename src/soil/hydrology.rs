@@ -1,3 +1,6 @@
+use std::ops::Deref;
+use image_crate::ImageBuffer;
+use image_crate::Luma;
 use crate::soil::config::{GreyscaleImage, SimArgs};
 
 const K_CALORIES_NEEDED_TO_EVAPORATE_1_G_WATER: f64 = 0.54;
@@ -20,7 +23,8 @@ pub fn calculate_hydrology_map(
             .into_iter()
             .map(|y| {
                 (0..edaphic_map.len()).into_iter().map(move |x| {
-                    let soil = &sim_args.soils[&sim_args.soil_ids_map[(x, y)]];
+                    let soil_map: ImageBuffer<Luma<u8>, Vec<u8>> = ImageBuffer::from_raw(1024, 1024, sim_args.soil_ids_map.clone()).unwrap();
+                    let soil = &sim_args.soils[&soil_map.get_pixel(x as u32, y as u32)[0]];
                     let depth_coefficient = (edaphic_map[(x, y)] / 100.0).min(1.0);
                     let water_supply = (sim_args.biom.groundwater + sim_args.biom.avg_rainfall_per_day)
                         * depth_coefficient
