@@ -7,8 +7,8 @@ class UserInterface {open
   Function {make_window()} {open
   } {
     Fl_Window main_window {
-      label {OpenBattlesim Map Generator} open
-      xywh {51 237 870 579} type Single color 55 visible
+      label {OpenBattlesim Map Generator} open selected
+      xywh {306 248 870 579} type Single color 55 visible
     } {
       Fl_Menu_Bar menu_bar {open
         xywh {-1 0 870 30} color 55
@@ -152,12 +152,12 @@ class UserInterface {open
         }
         Fl_Group weather_pane {
           label Weather open
-          xywh {0 60 870 520}
+          xywh {0 60 870 520} hide
         } {
           Fl_Group {} {open
             xywh {0 60 870 520} box BORDER_BOX color 7
           } {
-            Fl_Group weather_preview {open selected
+            Fl_Group weather_preview {open
               xywh {28 99 447 446} box BORDER_FRAME color 37 labelcolor 8 align 0
             } {}
             Fl_Group {} {
@@ -248,7 +248,7 @@ class UserInterface {open
         }
         Fl_Group soil_pane {
           label Soil open
-          xywh {0 60 870 520} color 7 hide
+          xywh {0 60 870 520} color 7
         } {
           Fl_Group {} {open
             xywh {0 60 870 520}

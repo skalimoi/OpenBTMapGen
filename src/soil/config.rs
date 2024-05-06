@@ -15,7 +15,7 @@ use crate::soil::orography::calculate_normal_map;
 use crate::soil::probabilities::calculate_probabilities;
 use crate::soil_def::{VegetationCollection, VegetationMaps};
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct GreyscaleImage<T> {
     pub image: Vec<T>,
     len: usize,

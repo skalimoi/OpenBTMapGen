@@ -68,7 +68,10 @@ struct FileData {
     eroded_full_color: Vec<u8>,
     eroded_full: Vec<u16>,
     weather_data: Vec<GenData>,
-    discharge: Vec<u8>
+    discharge: Vec<u8>,
+    soil: Vec<u8>,
+    vegetation_maps: VegetationCollection,
+    datamaps: VegetationMaps
 }
 
 #[derive(Copy, Clone)]
@@ -209,6 +212,16 @@ fn new_do(program_data: &mut FileData) {
         eroded_full: vec![],
         weather_data: vec![],
         discharge: vec![],
+        soil: vec![],
+        vegetation_maps: VegetationCollection {
+            generated: HashMap::new()
+        },
+        datamaps: VegetationMaps {
+            insolation: GreyscaleImage::new(vec![]),
+            edaphology: GreyscaleImage::new(vec![]),
+            hydrology: GreyscaleImage::new(vec![]),
+            orography: GreyscaleImage::new(vec![]),
+        }
     };
         
     let _ = replace::<FileData>(program_data, clean);
@@ -236,6 +249,13 @@ fn export_do(program_data: &mut FileData) {
     i.save(dir_string.clone() + "/terrain/map.png").unwrap();
     let d: ImageBuffer<Luma<u8>, Vec<u8>> = image_crate::ImageBuffer::from_raw(8192, 8192, program_data.discharge.clone()).unwrap();
     d.save(dir_string.clone() + "/terrain/hydro.png").unwrap();
+    for element in program_data.vegetation_maps.generated.iter() {
+        let mask: ImageBuffer<Luma<u8>, Vec<u8>> = image_crate::ImageBuffer::from_raw(1024, 1024, element.1.clone()).unwrap();
+        mask.save(dir_string.clone() + format!("/textures/{}.png", element.0.clone()).as_str()).unwrap()
+    }
+    let soil: ImageBuffer<Luma<u8>, Vec<u8>> = image_crate::ImageBuffer::from_raw(1024, 1024, program_data.soil.clone()).unwrap();
+    soil.save(dir_string.clone() + "/terrain/soil_ids.png").unwrap();
+
 }
 
 fn save_file_do(program_data: &mut FileData, is_workplace: &mut bool, path: &mut String, filename: &mut String) {
@@ -288,6 +308,16 @@ fn open_file_do(program_data: &mut FileData) -> (FileData, PathBuf) {
         eroded_full: vec![],
         weather_data: vec![],
         discharge: vec![],
+        soil: vec![],
+        vegetation_maps: VegetationCollection {
+            generated: HashMap::new()
+        },
+        datamaps: VegetationMaps {
+            insolation: GreyscaleImage::new(vec![]),
+            edaphology: GreyscaleImage::new(vec![]),
+            hydrology: GreyscaleImage::new(vec![]),
+            orography: GreyscaleImage::new(vec![]),
+        }
     };
     let mut nfc = dialog::NativeFileChooser::new(dialog::NativeFileChooserType::BrowseFile);
     nfc.set_filter("RON files\t*.ron");
@@ -372,7 +402,17 @@ fn main() {
         eroded_full_color: vec![],
         eroded_full: vec![],
         weather_data: vec![],
-        discharge: vec![]
+        discharge: vec![],
+        soil: vec![],
+        vegetation_maps: VegetationCollection {
+            generated: HashMap::new()
+        },
+        datamaps: VegetationMaps {
+            insolation: GreyscaleImage::new(vec![]),
+            edaphology: GreyscaleImage::new(vec![]),
+            hydrology: GreyscaleImage::new(vec![]),
+            orography: GreyscaleImage::new(vec![]),
+        }
     };
 
 
@@ -639,17 +679,10 @@ fn main() {
     soilchoices.insert(SoilType::Loam, false);
     soilchoices.insert(SoilType::Clay, false);
     soilchoices.insert(SoilType::Sand, false);
-
-    let mut vegmaps = VegetationMaps {
-      insolation: GreyscaleImage::new(vec![]),
-        edaphology: GreyscaleImage::new(vec![]),
-        hydrology: GreyscaleImage::new(vec![]),
-        orography: GreyscaleImage::new(vec![]),
-        soil_int: vec![]
-    };
+    
 
     let mut soil_veg_params = VegetationData {
-        base: SoilType::Dirt,
+        base: SoilType::Stone,
         blocklist: soilchoices,
         vegetationlist: HashMap::new()
     };
@@ -678,18 +711,19 @@ fn main() {
                     gl_widget.show();
                 }
                 Message::NextVeg => {
-                    index+=1;
-                    let element = index_list[index-1].clone();
-                    let map = veg_collection.clone().generated.get(&element).unwrap().clone();
+                    println!("{:?}", file.vegetation_maps.generated);
+                    let element = index_list[index].clone();
+                    let map = file.vegetation_maps.clone().generated.get(&element).unwrap().clone();
                     let i = RgbImage::new(map.as_slice(), 1024, 1024, ColorDepth::Rgb8).unwrap();
                     ui.veg_preview.set_image_scaled(None::<SharedImage>);
                     ui.veg_preview.set_image_scaled(SharedImage::from_image(i).ok());
                     ui.veg_preview.redraw();
                     ui.veg_name.set_label(format!("Now displaying: {}", element).as_str());
+                    index+=1;
                 }
                 Message::GenVegSel => {
-                    generate_selected_do(&mut ui.vegetation_list, &mut vegmaps, &mut soil_veg_params, &mut file, &mut veg_collection);
-                    for element in veg_collection.clone().generated.into_iter() {
+                    generate_selected_do(&mut ui.vegetation_list, &mut soil_veg_params, &mut file);
+                    for element in file.vegetation_maps.clone().generated.into_iter() {
                         let name = element.0.clone();
                         index_list.push(name);
                     }
@@ -792,9 +826,10 @@ fn main() {
                     let i: ImageBuffer<Luma<u16>, Vec<u16>> = ImageBuffer::from_raw(8192, 8192, file.eroded_full.clone()).unwrap();
                     let hydro: ImageBuffer<Luma<u8>, Vec<u8>> = ImageBuffer::from_raw(8192, 8192, file.discharge.clone()).unwrap();
                     let soil = init_soilmaker(&mut ui.soil_preview, soil_base, &soil_veg_params.blocklist, &i, &hydro);
-                    vegmaps.soil_int = soil;
+                    file.soil = soil;
                     ui.soil_preview.set_image_scaled(None::<SharedImage>);
-                    ui.soil_preview.set_image_scaled(SharedImage::from_image(RgbImage::new(vegmaps.soil_int.as_slice(), 1024, 1024, ColorDepth::Rgb8).unwrap()).ok());
+                    ui.soil_preview.set_image_scaled(SharedImage::from_image(RgbImage::new(file.soil.as_slice(), 1024, 1024, ColorDepth::Rgb8).unwrap()).ok());
+                    ui.soil_preview.redraw();
                 }
                 Message::ImportHeightmap => {
                     heightmap_importer_win.show();
@@ -1023,8 +1058,10 @@ fn main() {
                     file.raw_full = p.0.raw_full;
                     file.color_eroded_512 = p.0.color_eroded_512;
                     file.eroded_raw_512 = p.0.eroded_raw_512;
-                    file.color_map_512 = p.0.color_map_512.clone();
+                    file.color_map_512.clone_from(&p.0.color_map_512);
                     file.raw_map_512 = p.0.raw_map_512;
+                    file.soil = p.0.soil;
+                    file.vegetation_maps = p.0.vegetation_maps;
 
                     if !file.color_map_512.is_empty() {
                         topography::update_noise_img(&mut ui.preview_box_topo, &file, 0, ColorDepth::Rgb8);
@@ -1037,6 +1074,11 @@ fn main() {
                     }
                     if !file.discharge.is_empty() {
                         hydro::update_hydro_prev(&mut ui.hydro_mask_preview, false, &mut file);
+                    }
+                    if !file.soil.is_empty() {
+                        ui.soil_preview.set_image_scaled(None::<SharedImage>);
+                        ui.soil_preview.set_image_scaled(SharedImage::from_image(RgbImage::new(file.soil.as_slice(), 1024, 1024, ColorDepth::Rgb8).unwrap()).ok());
+                        ui.soil_preview.redraw();
                     }
 
 

@@ -8,7 +8,7 @@ use fltk::prelude::{BrowserExt, MenuExt};
 use image_newest::{ImageBuffer, Luma};
 use image_newest::imageops::FilterType;
 use nalgebra::Vector3;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use crate::FileData;
 use crate::soil::config::{Biom, GreyscaleImage, Map, SimConfig, Soil, SunConfig, Vegetation};
 
@@ -30,21 +30,22 @@ pub struct VegetationData {
     pub vegetationlist: HashMap<String, bool>
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct VegetationMaps {
     pub insolation: GreyscaleImage<f64>,
     pub edaphology: GreyscaleImage<f64>,
     pub hydrology: GreyscaleImage<f64>,
     pub orography: GreyscaleImage<Vector3<f64>>,
-    pub soil_int: Vec<u8>
 }
 
-#[derive(Clone)]
+
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct VegetationCollection {
     pub generated: HashMap<String, Vec<u8>>
 }
 
-pub fn generate_selected_do(c: &mut CheckBrowser, vegetation_maps: &mut VegetationMaps, vegdata: &mut VegetationData, filedata: &mut FileData, vegetation_collection: &mut VegetationCollection) {
+pub fn generate_selected_do(c: &mut CheckBrowser, vegdata: &mut VegetationData, filedata: &mut FileData) {
     collect_values(c, vegdata);
     let h: ImageBuffer<Luma<u16>, Vec<u16>> = ImageBuffer::from_raw(8192, 8192, filedata.eroded_full.clone()).unwrap();
     let h = image_newest::imageops::resize(&h, 1024, 1024, FilterType::Nearest);
@@ -54,7 +55,7 @@ pub fn generate_selected_do(c: &mut CheckBrowser, vegetation_maps: &mut Vegetati
     let m = Map {
         biom: "TemperateZone".parse().unwrap(),
         height_map_path: h,
-        texture_map_path: vegetation_maps.clone().soil_int,
+        texture_map_path: filedata.soil.clone(),
         height_conversion: 1.0,
         max_soil_depth: 300.0,
         pixel_size: 100.0
@@ -86,16 +87,20 @@ pub fn generate_selected_do(c: &mut CheckBrowser, vegetation_maps: &mut Vegetati
         }
     }
     let reflection_coefficient = 0.1;
-    sim_config.calculate_maps(&sun_config, reflection_coefficient, vegetation_maps);
-    sim_config.calculate_probabilities(vegetation_maps, to_be_generated.as_slice(), sun_config.daylight_hours, vegetation_collection);
+    if filedata.datamaps.orography.image.is_empty() || filedata.datamaps.hydrology.image.is_empty() || filedata.datamaps.edaphology.image.is_empty() || filedata.datamaps.insolation.image.is_empty() {
+        sim_config.calculate_maps(&sun_config, reflection_coefficient, &mut filedata.datamaps);
+    }
+    sim_config.calculate_probabilities(&mut filedata.datamaps, to_be_generated.as_slice(), sun_config.daylight_hours, &mut filedata.vegetation_maps);
 }
 
 // TODO falla aquí - option none dice
 pub fn collect_values(w: &mut CheckBrowser, data: &mut VegetationData) {
     let nitems = w.nitems();
     for i in 0..nitems {
+        println!("{:?}", w.nitems());
+        println!("{:?}", w.text((i + 1) as i32));
         data.vegetationlist.clear();
-        data.vegetationlist.insert(w.text(i as i32).unwrap(), w.checked(i as i32));
+        data.vegetationlist.insert(w.text((i + 1) as i32).unwrap(), w.checked((i+1) as i32));
     }
 }
 

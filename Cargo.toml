@@ -15,7 +15,7 @@ image_crate = { package = "image", version =  "0.24.7" }
 image_newest = {package = "image", version= "0.23.14", default-features = false}
 imageproc = "0.23.0"
 map-range = "0.1.2"
-nalgebra = "0.32.3"
+nalgebra = { version = "0.32.3", features = ["serde-serialize"] }
 noise = {version = "0.8.2", features = ["images"]}
 rand = "0.8.5"
 rand_chacha = "0.3.1"
