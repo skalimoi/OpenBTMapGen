@@ -7,10 +7,10 @@ class UserInterface {open
   Function {make_window()} {open
   } {
     Fl_Window main_window {
-      label {OpenBattlesim Map Generator} open selected
+      label {OpenBattlesim Map Generator} open
       xywh {306 248 870 579} type Single color 55 visible
     } {
-      Fl_Menu_Bar menu_bar {open
+      Fl_Menu_Bar menu_bar {open selected
         xywh {-1 0 870 30} color 55
       } {}
       Fl_Tabs {} {open
@@ -288,11 +288,11 @@ class UserInterface {open
               }
             }
             Fl_Group {} {
-              label {Soil preview} open
-              xywh {12 337 235 230}
+              label {Vegetation preview} open
+              xywh {12 337 238 232}
             } {
               Fl_Box veg_preview {
-                xywh {12 337 235 13}
+                xywh {15 339 230 230}
               }
             }
           }

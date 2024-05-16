@@ -83,8 +83,9 @@ pub fn init_soilmaker(f: &mut Frame, base_soil: SoilType, blocklist: &HashMap<So
     let colormap = color_reduce::palette::BasePalette::new(
         color_vec
     );
-    quantize(&mut old_to_convert, &colormap, QuantizeMethod::CIE2000, None);
+    quantize(&mut old_to_convert, &colormap, QuantizeMethod::Luma, None);
     let i = image_newest::imageops::resize(&old_to_convert, 1024, 1024, image_newest::imageops::FilterType::Nearest);
+    i.save("soil_test.png");
     f.set_image_scaled(None::<SharedImage>);
     let s = RgbImage::new(i.as_raw().as_slice(), 1024, 1024, ColorDepth::Rgb8).unwrap();
     f.set_image(SharedImage::from_image(s).ok());
@@ -185,7 +186,7 @@ fn generate_low_soils(_i: &mut DynamicImage, h_map: &DynamicImage) -> DynamicIma
     let expanded_1 = imageproc::morphology::dilate(&expanded, Norm::L1, 3);
     let expanded = imageproc::morphology::close(&expanded_1, Norm::L1, 8);
     let mut converted_to_old_buffer: buffer_old<Rgb_old<u8>, Vec<u8>> = buffer_old::from_raw(DIM as u32, DIM as u32, ImageLuma8(clay).into_rgb8().into_raw()).unwrap();
-    quantize(&mut converted_to_old_buffer, &index, QuantizeMethod::CIE2000, None);
+    quantize(&mut converted_to_old_buffer, &index, QuantizeMethod::Luma, None);
     let mut base = DynamicImage::ImageRgb8(ImageBuffer::from_raw(DIM as u32, DIM as u32, converted_to_old_buffer.into_raw()).unwrap());
     for x in 0..DIM {
         for y in 0..DIM {

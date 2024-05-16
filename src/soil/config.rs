@@ -18,7 +18,7 @@ use crate::soil_def::{VegetationCollection, VegetationMaps};
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct GreyscaleImage<T> {
     pub image: Vec<T>,
-    len: usize,
+    pub len: usize,
 }
 
 impl<T> GreyscaleImage<T> {
@@ -222,9 +222,10 @@ impl SimConfig {
     // TODO: HACER STRUCT SOLO PARA ESTAS IMAGENES Y NO TENER QUE GUARDARLAS
     // TODO: COMPROBAR EL TEMA IMAGEN SI LO COGE BIEN O NO
     // TODO: TERMINAR DE CONFIGURAR SOIL_DEF.RS
-    pub fn calculate_probabilities(&self, mapdata: &VegetationMaps, vegetation_names: &[&str], _daylight_hours: i32, vegetation_collection: &mut VegetationCollection) {
+    pub fn calculate_probabilities(&self, mapdata: &mut VegetationMaps, vegetation_names: &[&str], _daylight_hours: i32, vegetation_collection: &mut VegetationCollection) {
         let soil_ids_map = GreyscaleImage::new(self.maps.texture_map_path.clone());
-
+        let x: ImageBuffer<Luma<u8>, Vec<u8>> = ImageBuffer::from_raw(1024, 1024, self.maps.texture_map_path.clone()).unwrap();
+        x.save("soil_veg_test.png");
         for vegetation in vegetation_names {
             let probabilities_map = calculate_probabilities(
                 &self.vegetations[*vegetation],
@@ -241,7 +242,7 @@ impl SimConfig {
             )
                 .unwrap();
             imageproc::contrast::stretch_contrast_mut(&mut probabilities_image, 100, 255);
-            vegetation_collection.generated.insert(vegetation.clone().parse().unwrap(), probabilities_image.into_raw());
+            vegetation_collection.generated.insert(vegetation.parse().unwrap(), probabilities_image.into_raw());
         }
     }
 }

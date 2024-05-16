@@ -7,7 +7,7 @@ use fltk::app::Sender;
 use map_range::MapRange;
 use fltk::image::{RgbImage, SharedImage};
 use fltk::{*, prelude::*};
-use image_crate::{DynamicImage, EncodableLayout, GenericImageView, ImageBuffer, Luma, Pixel};
+use image_crate::{DynamicImage, EncodableLayout, GenericImageView, ImageBuffer, Luma, Pixel, Rgb};
 use noise::utils::NoiseMapBuilder;
 use noise::{Fbm, MultiFractal, Perlin, Seedable};
 use rand::{Rng, thread_rng};
@@ -228,7 +228,7 @@ fn new_do(program_data: &mut FileData) {
 }
 
 fn set_data(loaded_data: &mut FileData, data: &mut FileData) {
-    let _ = swap::<FileData>(data, &mut loaded_data.clone());
+    let _ = replace::<FileData>(data, loaded_data.clone());
 }
 
 fn export_do(program_data: &mut FileData) {
@@ -686,10 +686,7 @@ fn main() {
         blocklist: soilchoices,
         vegetationlist: HashMap::new()
     };
-
-    let mut veg_collection = VegetationCollection {
-        generated: HashMap::new(),
-    };
+    
 
     let mut dir: PathBuf = PathBuf::new();
 
@@ -711,10 +708,14 @@ fn main() {
                     gl_widget.show();
                 }
                 Message::NextVeg => {
-                    println!("{:?}", file.vegetation_maps.generated);
+                    if index == index_list.len() {
+                        index = 0;
+                    }
+                    dbg!(&index_list.len());
                     let element = index_list[index].clone();
                     let map = file.vegetation_maps.clone().generated.get(&element).unwrap().clone();
-                    let i = RgbImage::new(map.as_slice(), 1024, 1024, ColorDepth::Rgb8).unwrap();
+                    let b: ImageBuffer<Luma<u8>, Vec<u8>> = ImageBuffer::from_raw(1024, 1024, map.clone()).unwrap();
+                    let i = RgbImage::new(b.into_raw().as_slice(), 1024, 1024, ColorDepth::L8).unwrap();
                     ui.veg_preview.set_image_scaled(None::<SharedImage>);
                     ui.veg_preview.set_image_scaled(SharedImage::from_image(i).ok());
                     ui.veg_preview.redraw();
@@ -722,7 +723,9 @@ fn main() {
                     index+=1;
                 }
                 Message::GenVegSel => {
+                    file.vegetation_maps.generated.clear();
                     generate_selected_do(&mut ui.vegetation_list, &mut soil_veg_params, &mut file);
+                    dbg!(file.vegetation_maps.generated.keys());
                     for element in file.vegetation_maps.clone().generated.into_iter() {
                         let name = element.0.clone();
                         index_list.push(name);
@@ -827,6 +830,9 @@ fn main() {
                     let hydro: ImageBuffer<Luma<u8>, Vec<u8>> = ImageBuffer::from_raw(8192, 8192, file.discharge.clone()).unwrap();
                     let soil = init_soilmaker(&mut ui.soil_preview, soil_base, &soil_veg_params.blocklist, &i, &hydro);
                     file.soil = soil;
+                    //TODO VER POR QUÉ SALE MAL LA IMAGEN, SERÁ PORQUE ES RGB EN VEZ DE LUMA?
+                    let x: ImageBuffer<Luma<u8>, Vec<u8>> = ImageBuffer::from_raw(1024, 1024, file.soil.clone()).unwrap();
+                    x.save("soil_test_main.png");
                     ui.soil_preview.set_image_scaled(None::<SharedImage>);
                     ui.soil_preview.set_image_scaled(SharedImage::from_image(RgbImage::new(file.soil.as_slice(), 1024, 1024, ColorDepth::Rgb8).unwrap()).ok());
                     ui.soil_preview.redraw();
@@ -1062,6 +1068,7 @@ fn main() {
                     file.raw_map_512 = p.0.raw_map_512;
                     file.soil = p.0.soil;
                     file.vegetation_maps = p.0.vegetation_maps;
+                    file.datamaps = p.0.datamaps;
 
                     if !file.color_map_512.is_empty() {
                         topography::update_noise_img(&mut ui.preview_box_topo, &file, 0, ColorDepth::Rgb8);
@@ -1090,11 +1097,11 @@ fn main() {
                     ui.detail_level.redraw();
                     ui.erod_scale.set_value(format!("{}", &file.topography.erod_scale.clone()).as_str().parse().unwrap());
                     ui.erod_scale.redraw();
-                    ui.min_height_input.set_value(file.topography.min_height.clone() as f64);
+                    ui.min_height_input.set_value(file.topography.min_height as f64);
                     ui.min_height_input.redraw();
-                    ui.max_height_input.set_value(file.topography.max_height.clone() as f64);
+                    ui.max_height_input.set_value(file.topography.max_height as f64);
                     ui.max_height_input.redraw();
-                    ui.erosion_cycles_input.set_value(file.topography.erosion_cycles.clone() as f64);
+                    ui.erosion_cycles_input.set_value(file.topography.erosion_cycles as f64);
                     ui.erosion_cycles_input.redraw();
                     ui.weather_seed_input.set_value(format!("{}", &file.weather.seed.unwrap().clone()).as_str());
                     ui.weather_seed_input.redraw();
@@ -1119,7 +1126,7 @@ fn main() {
                         terrain_material.clone(),
                         Arc::new(
                             move |x, y| {
-                                map_b.clone().get_pixel(x as u32, y as u32).channels().first().unwrap().clone() as f32 * 0.01
+                                *map_b.clone().get_pixel(x as u32, y as u32).channels().first().unwrap() as f32 * 0.01
                             }
                         ),
                         512.0,
