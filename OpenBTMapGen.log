@@ -1,0 +1,8 @@
+11:19:16 [INFO] GDAL library checked at ./utils/gdal/
+Ok!
+11:19:16 [INFO] Whitebox Open Core library checked at ./utils/wbt/
+Ok!
+11:19:17 [INFO] Input file size is 8192, 8192
+0...10...20...30...40...50...60...70...80...90...100 - done.
+
+11:19:17 [TRACE] (1) soil_binder: [src\soil_binder\src\lib.rs:63] 

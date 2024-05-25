@@ -6,7 +6,7 @@ use fltk::image::{PngImage, RgbImage, SharedImage};
 use fltk::prelude::{ButtonExt, InputExt, MenuExt, ValuatorExt, WidgetExt};
 use image_crate::{imageops};
 use image_crate::imageops::FilterType;
-use image_newest::{ImageBuffer, Rgb};
+use image_old::{ImageBuffer, Rgb};
 use ordered_float::OrderedFloat;
 use rand::{Rng, thread_rng};
 use three_d::{ColorMaterial, Gm, Mesh};
@@ -97,7 +97,7 @@ pub fn vis_image(r#box: &mut Group, hour: u32, grid_vector: &mut Vec<GenData>, s
 }
     i.save("test_16.png").unwrap();
     r#box.set_image_scaled(None::<SharedImage>);
-    let a = image_newest::imageops::resize(&i, 1024, 1024, image_newest::imageops::FilterType::Nearest);
+    let a = image_old::imageops::resize(&i, 1024, 1024, image_old::imageops::FilterType::Nearest);
     let s = RgbImage::new(a.as_raw().as_slice(), 1024, 1024, ColorDepth::Rgb8).unwrap();
     r#box.set_image_scaled(Some(SharedImage::from_image(s).unwrap()));
     r#box.redraw();

@@ -28,12 +28,14 @@ use fltk::enums::{ColorDepth, Event, Shortcut};
 use image_crate::imageops::FilterType;
 use ron::de::from_reader;
 use serde::{Deserialize, Serialize};
+use simplelog::{ColorChoice, CombinedLogger, Config, LevelFilter, TerminalMode, TermLogger, WriteLogger};
+use soil_binder::{gdal_check, georreference, whitebox_check};
 use topo_settings::NoiseTypesUi;
 use topography::{DEFAULT_TOPOSETTINGS, DIMENSIONS};
 use weather_pane::DEFAULT_WEATHERSETTINGS;
 use crate::fastlem_opt::generate_terrain;
-use crate::soil::config::GreyscaleImage;
-use crate::soil::soilmaker::init_soilmaker;
+use crate::plant_maker::config::GreyscaleImage;
+use crate::plant_maker::soilmaker::init_soilmaker;
 use crate::soil_def::{base_choice_init, generate_selected_do, load_and_show_veg, SoilType, VegetationCollection, VegetationData, VegetationMaps};
 use crate::topography::{max_bounds_do, min_bounds_do, lod_do, erod_scale_do, apply_color_eroded, apply_color};
 use crate::ui::HeightmapInterface;
@@ -42,6 +44,7 @@ use crate::weather::{Climate, GenData, koppen_afam, koppen_as, koppen_aw, koppen
 use crate::weather_settings::WeatherSettings;
 use crate::WeatherVisualization::Init;
 
+//TODO al hacer new scenario y darle random se peta
 mod erosion;
 mod topo_settings;
 mod ui;
@@ -53,8 +56,9 @@ mod hydro;
 mod weather_pane;
 mod fastlem_opt;
 
-mod soil;
+mod plant_maker;
 mod soil_def;
+
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 struct FileData {
@@ -357,6 +361,16 @@ fn seed_random_do(
 
 
 fn main() {
+    CombinedLogger::init(
+        vec![
+            TermLogger::new(LevelFilter::Trace, Config::default(), TerminalMode::Mixed, ColorChoice::Auto),
+            WriteLogger::new(LevelFilter::Trace, Config::default(), File::create("OpenBTMapGen.log").unwrap()),
+        ]
+    ).unwrap();
+    
+    gdal_check();
+    whitebox_check();
+    
     let (mut is_file_workspace, mut workspace_path, mut file_name) = (false, "".to_string(), "".to_string());
 
     let mut view_state = ViewState {
