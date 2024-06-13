@@ -1,11 +1,7 @@
-use colorgrad::Color;
 use fltk::enums::ColorDepth;
-use fltk::frame::Frame;
 use fltk::group::Group;
-use fltk::image::{PngImage, RgbImage, SharedImage};
+use fltk::image::{RgbImage, SharedImage};
 use fltk::prelude::{ButtonExt, InputExt, MenuExt, ValuatorExt, WidgetExt};
-use image_crate::{imageops};
-use image_crate::imageops::FilterType;
 use image_old::{ImageBuffer, Rgb};
 use ordered_float::OrderedFloat;
 use rand::{Rng, thread_rng};

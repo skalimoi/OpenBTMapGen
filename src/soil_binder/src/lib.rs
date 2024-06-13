@@ -1,9 +1,11 @@
-use std::io;
+#![feature(absolute_path)]
+use std::{io, path};
 use std::io::Write;
 use std::path::Path;
 use std::process::Command;
 use std::str::from_utf8;
-use log::{error, info, trace};
+use log::{debug, error, info, trace};
+
 
 pub fn gdal_check() {
     if !Path::new("utils/gdal/").exists() | !Path::new("utils/gdal/gdal_translate.exe").exists() | !Path::new("utils/gdal/gdalwarp.exe").exists() {
@@ -30,12 +32,13 @@ pub fn whitebox_check() {
 }
 
 pub fn geomorphons() {
-    let output = Command::new(Path::new("utils/wbs/whitebox_tools.exe").canonicalize().unwrap())
+    let gdal_translate_path = Path::new("utils/gdal/gdal_translate.exe").canonicalize().unwrap();
+    let output = Command::new(Path::new("utils/wbt/whitebox_tools.exe").canonicalize().unwrap())
         .args([
             "-r=Geomorphons",
             "-v",
             format!("--wd={}", Path::new("cache").canonicalize().unwrap().to_str().unwrap()).as_str(),
-            "--dem=georref.tif",
+            "--dem=base.tif",
             "-o=gm.tif",
             "--search=150",
             "--threshold=0.5",
@@ -45,29 +48,97 @@ pub fn geomorphons() {
         .output().unwrap();
     info!("{}", from_utf8(&output.stdout).unwrap());
     trace!("{}", from_utf8(&output.stderr).unwrap());
+
+    let output = Command::new(gdal_translate_path.clone())
+        .args([
+            "-of",
+            "PNG",
+            // "-ot",
+            // "UInt16",
+            // "-scale",
+            // "0",
+            // "65535",
+            path::absolute("cache/gm.tif").unwrap().to_str().unwrap(),
+            path::absolute("cache/gm.png").unwrap().to_str().unwrap(),
+        ])
+        .output().expect("Error running scale command!");
+    io::stdout().write_all(&output.stdout).unwrap();
+    io::stderr().write_all(&output.stderr).unwrap();
 }
 
-pub fn heightpercentile() {
-    let output = Command::new(Path::new("utils/wbs/whitebox_tools.exe").canonicalize().unwrap())
+pub fn elevpercentile() {
+    let gdal_translate_path = Path::new("utils/gdal/gdal_translate.exe").canonicalize().unwrap();
+    let output = Command::new(Path::new("utils/wbt/whitebox_tools.exe").canonicalize().unwrap())
         .args([
-            "-r=Geomorphons",
+            "-r=ElevPercentile",
             "-v",
             format!("--wd={}", Path::new("cache").canonicalize().unwrap().to_str().unwrap()).as_str(),
-            "--dem=georref.tif",
-            "-o=gm.tif",
-            "--search=150",
-            "--threshold=0.5",
-            "--tdist=0.0",
-            "--forms"
+            "--dem=base.tif",
+            "-o=ep.tif",
+            // "--filter=25"
         ])
         .output().unwrap();
     info!("{}", from_utf8(&output.stdout).unwrap());
     trace!("{}", from_utf8(&output.stderr).unwrap());
+    
+    let output = Command::new(gdal_translate_path.clone())
+        .args([
+            "-of",
+            "PNG",
+            "-ot",
+            "Byte",
+            "-scale",
+            "0",
+            "73",
+            // "0",
+            // "255",
+            path::absolute("cache/ep.tif").unwrap().to_str().unwrap(),
+            path::absolute("cache/ep.png").unwrap().to_str().unwrap(),
+        ])
+        .output().expect("Error running scale command!");
+    io::stdout().write_all(&output.stdout).unwrap();
+    io::stderr().write_all(&output.stderr).unwrap();
 }
 
-pub fn georreference() {
-    let path = Path::new("utils/gdal/gdal_translate.exe").canonicalize().unwrap();
-    let output = Command::new(path)
+pub fn trindex() {
+    let gdal_translate_path = Path::new("utils/gdal/gdal_translate.exe").canonicalize().unwrap();
+    let output = Command::new(Path::new("utils/wbt/whitebox_tools.exe").canonicalize().unwrap())
+        .args([
+            "-r=RuggednessIndex",
+            "-v",
+            format!("--wd={}", Path::new("cache").canonicalize().unwrap().to_str().unwrap()).as_str(),
+            "--dem=base.tif",
+            "-o=tri.tif",
+        ])
+        .output().unwrap();
+    info!("{}", from_utf8(&output.stdout).unwrap());
+    trace!("{}", from_utf8(&output.stderr).unwrap());
+    
+    
+    
+    let output = Command::new(gdal_translate_path.clone())
+        .args([
+            "-of",
+            "PNG",
+            // "-ot",
+            // "UInt16",
+            "-scale",
+            "0",
+            "394",
+            "0",
+            "255",
+            path::absolute("cache/tri.tif").unwrap().to_str().unwrap(),
+            path::absolute("cache/tri.png").unwrap().to_str().unwrap(),
+        ])
+        .output().expect("Error running scale command!");
+    io::stdout().write_all(&output.stdout).unwrap();
+    io::stderr().write_all(&output.stderr).unwrap();
+}
+
+pub fn georreference(min_val: i32, max_val: i32) {
+    let gdal_translate_path = Path::new("utils/gdal/gdal_translate.exe").canonicalize().unwrap();
+    debug!("{}", Path::new("cache/map.png").exists());
+    let output = Command::new(gdal_translate_path.clone())
         .args([
             "-of",
             "GTiff",
@@ -91,16 +162,16 @@ pub fn georreference() {
                   "8192",
                   "-4.917",
                   "9.071",
-            "D:\\Archivos\\OpenBTMapGen\\cache\\map.png",
-            "D:\\Archivos\\OpenBTMapGen\\cache\\map.tif"
+                  path::absolute("cache/map.png").unwrap().to_str().unwrap(),
+            path::absolute("cache/map.tif").unwrap().to_str().unwrap(),
         ])
         .output().expect("Error running command!");
     info!("{}", from_utf8(&output.stdout).unwrap());
     trace!("{}", from_utf8(&output.stderr).unwrap());
     // io::stdout().write_all(&output.stdout).unwrap();
     // io::stderr().write_all(&output.stderr).unwrap();
-    let path = Path::new("utils/gdal/gdalwarp.exe").canonicalize().unwrap();
-    let output = Command::new(path)
+    let gdalwarp_path = Path::new("utils/gdal/gdalwarp.exe").canonicalize().unwrap();
+    let output = Command::new(gdalwarp_path)
         .args([
             "-r",
                   "lanczos",
@@ -109,10 +180,23 @@ pub fn georreference() {
                   "COMPRESS=NONE",
             "-t_srs",
                   "EPSG:4326",
-            "D:\\Archivos\\OpenBTMapGen\\cache\\map.tif",
-            "D:\\Archivos\\OpenBTMapGen\\cache\\georef.tif"
+            path::absolute("cache/map.tif").unwrap().to_str().unwrap(),
+            path::absolute("cache/georef.tif").unwrap().to_str().unwrap(),
         ])
         .output().expect("Error running warp command!");
     io::stdout().write_all(&output.stdout).unwrap();
     io::stderr().write_all(&output.stderr).unwrap();
+    
+    let output = Command::new(gdal_translate_path.clone())
+        .args([
+            "-scale",
+            format!("{}", min_val).as_str(),
+            format!("{}", max_val).as_str(),
+            path::absolute("cache/georef.tif").unwrap().to_str().unwrap(),
+            path::absolute("cache/base.tif").unwrap().to_str().unwrap(),
+        ])
+        .output().expect("Error running scale command!");
+    io::stdout().write_all(&output.stdout).unwrap();
+    io::stderr().write_all(&output.stderr).unwrap();
 }
+

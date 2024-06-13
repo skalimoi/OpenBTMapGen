@@ -1,4 +1,3 @@
-use std::ops::Deref;
 use image_crate::ImageBuffer;
 use image_crate::Luma;
 use crate::plant_maker::config::{GreyscaleImage, SimArgs};

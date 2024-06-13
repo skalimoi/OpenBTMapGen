@@ -1,26 +1,19 @@
 use std::collections::HashMap;
 use std::fs;
-use std::fs::File;
-use std::io::Read;
 use std::path::Path;
-use imageproc::drawing::Canvas;
 use color_reduce;
-use color_reduce::{quantize, BasePalette, QuantizeMethod};
+use color_reduce::{quantize, QuantizeMethod};
 use fltk::enums::ColorDepth;
 use fltk::frame::Frame;
-use fltk::image::{PngImage, RgbImage, SharedImage};
+use fltk::image::{RgbImage, SharedImage};
 use fltk::prelude::WidgetExt;
-use image_crate::{ColorType, DynamicImage, GenericImage, ImageBuffer, Luma, Rgb, Rgba};
-use image_crate::DynamicImage::{ImageLuma16, ImageLuma8, ImageRgb8, ImageRgba8};
-use image_crate::imageops::FilterType;
-use image_old::{ImageBuffer as buffer_old, Rgb as Rgb_old, Rgba as Rgba_old};
-use imageproc::distance_transform::Norm;
+use image_crate::{DynamicImage, ImageBuffer, Luma};
+use image_old::{ImageBuffer as buffer_old, Rgb as Rgb_old};
 
-use noise::{Fbm, MultiFractal, Perlin};
-use noise::utils::{NoiseMap, NoiseMapBuilder, PlaneMapBuilder};
-use rand::{Rng, thread_rng};
-use soil_binder::georreference;
-use crate::plant_maker::config::{Biom, GreyscaleImage, Map, SimConfig, Soil, SunConfig, Vegetation};
+use photon_rs::multiple::blend;
+use photon_rs::native::open_image;
+use soil_binder::{elevpercentile, geomorphons, georreference, trindex};
+use crate::plant_maker::config::GreyscaleImage;
 use crate::soil_def::SoilType;
 
 const DIM: u16 = 8192;
@@ -39,22 +32,60 @@ pub enum SoilColor {
     Sand([u8; 4])
 }
 
-pub fn init_soilmaker(f: &mut Frame, base_soil: SoilType, blocklist: &HashMap<SoilType, bool>, heightmap16: &ImageBuffer<Luma<u16>, Vec<u16>>, hydro_map: &ImageBuffer<Luma<u8>, Vec<u8>>) -> Vec<u8> {
-    let mut dynamic = DynamicImage::ImageLuma16(heightmap16.clone());
+pub fn init_soilmaker(f: &mut Frame, base_soil: SoilType, blocklist: &HashMap<SoilType, bool>, heightmap16: &ImageBuffer<Luma<u16>, Vec<u16>>, min_val: i32, max_val: i32) -> Vec<u8> {
+    let dynamic = DynamicImage::ImageLuma16(heightmap16.clone());
 
-    // TODO delete dir before shutdown
     if !Path::new("cache").exists() {
+        fs::create_dir("cache").expect("Cannot create cache dir!");
+    } else {
+        fs::remove_dir_all("cache");
         fs::create_dir("cache").expect("Cannot create cache dir!");
     }
     
     dynamic.save("cache/map.png");
     
-    georreference();
+    georreference(min_val, max_val);
+
+    geomorphons();
+
+    elevpercentile();
+
+    trindex();
+
+    //  blend operation //
+
+    let mut i = image_crate::open("cache/gm.png").unwrap().to_luma8();
+    let highest = *i.as_raw().iter().max().unwrap();
+    imageproc::contrast::stretch_contrast_mut(&mut i, 0, highest);
+    i.save("cache/gm.png");
     
-    let mut old_to_convert: buffer_old<Rgb_old<u8>, Vec<u8>> = buffer_old::from_raw(DIM as u32, DIM as u32, d_5.into_rgb8().into_raw()).unwrap();
+
+    // let mut i = image_crate::open("cache/tri.png").unwrap().to_luma8();
+    // let highest = *i.as_raw().iter().max().unwrap();
+    // imageproc::contrast::stretch_contrast_mut(&mut i, 6, 10);
+    // i.save("cache/tri.png");
+    // 
+    // let mut i = image_crate::open("cache/ep.png").unwrap().to_luma8();
+    // let highest = *i.as_raw().iter().max().unwrap();
+    // imageproc::contrast::stretch_contrast_mut(&mut i, 0, highest);
+    // i.save("cache/ep.png");
+    
+    let mut base = open_image("cache/gm.png").expect("File should open.");
+    let tri = open_image("cache/tri.png").expect("File should open.");
+    let elevp = open_image("cache/ep.png").expect("");
+    
+    blend(&mut base, &tri, "hard_light");
+    blend(&mut base, &elevp, "overlay");
+
+    let raw = base.get_raw_pixels();
+    
+    let mut old_to_convert: buffer_old<Rgb_old<u8>, Vec<u8>> = buffer_old::from_raw(8192, 8192, raw).unwrap();
+
+    /////////////////////
+    
     let mut color_vec: Vec<[u8; 3]> = vec![];
     for (soil, value) in blocklist.clone() {
-        if value == false {
+        if !value {
             match soil {
                 SoilType::Dirt => color_vec.push([5,5,5]),
                 SoilType::Silt => color_vec.push([100,100,100]),

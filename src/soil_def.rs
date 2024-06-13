@@ -1,14 +1,12 @@
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
-use std::ops::Deref;
 use fltk::browser::CheckBrowser;
-use fltk::button::Button;
 use fltk::prelude::{BrowserExt, MenuExt};
 use image_old::{ImageBuffer, Luma};
 use image_old::imageops::FilterType;
 use nalgebra::Vector3;
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 use crate::FileData;
 use crate::plant_maker::config::{Biom, GreyscaleImage, Map, SimConfig, Soil, SunConfig, Vegetation};
 

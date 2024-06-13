@@ -1,13 +1,11 @@
 
 
 
-use image_crate::io::Reader as ImageReader;
 use image_crate::ImageBuffer;
 use image_crate::Luma;
 use nalgebra::Vector3;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use image_old::imageops::FilterType;
 use crate::plant_maker::edaphology::calculate_soil_depth;
 use crate::plant_maker::hydrology::calculate_hydrology_map;
 use crate::plant_maker::insolation::calculate_actual_insolation;

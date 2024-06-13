@@ -4,41 +4,36 @@
 use std::collections::HashMap;
 use crate::topo_settings::TopoSettings;
 use fltk::app::Sender;
-use map_range::MapRange;
 use fltk::image::{RgbImage, SharedImage};
 use fltk::{*, prelude::*};
-use image_crate::{DynamicImage, EncodableLayout, GenericImageView, ImageBuffer, Luma, Pixel, Rgb};
-use noise::utils::NoiseMapBuilder;
-use noise::{Fbm, MultiFractal, Perlin, Seedable};
+use image_crate::{DynamicImage, GenericImageView, ImageBuffer, Luma, Pixel};
+use noise::{Fbm, Perlin, Seedable};
 use rand::{Rng, thread_rng};
 
 use std::sync::Arc;
-use fltk::window::{GlutWindow, Window};
+use fltk::window::GlutWindow;
 use three_d::{AmbientLight, Camera, ClearState, ColorMaterial, Context, CpuMaterial, CpuMesh, CpuTexture, Cull, DirectionalLight, FromCpuMaterial, Gm, LightingModel, Mat4, Mesh, PhysicalMaterial, RenderTarget, Srgba, Terrain, Vec3, Viewport};
 use std::default::Default;
 use std::fs::File;
 use std::fs;
-use std::mem::{replace, swap};
+use std::mem::replace;
 use std::ops::Index;
 use std::path::PathBuf;
-use fastlem::core::units::Elevation;
 
 use fltk::dialog::FileDialogOptions;
-use fltk::enums::{ColorDepth, Event, Shortcut};
+use fltk::enums::{ColorDepth, Shortcut};
 use image_crate::imageops::FilterType;
 use ron::de::from_reader;
 use serde::{Deserialize, Serialize};
 use simplelog::{ColorChoice, CombinedLogger, Config, LevelFilter, TerminalMode, TermLogger, WriteLogger};
-use soil_binder::{gdal_check, georreference, whitebox_check};
-use topo_settings::NoiseTypesUi;
-use topography::{DEFAULT_TOPOSETTINGS, DIMENSIONS};
+use soil_binder::{gdal_check, whitebox_check};
+use topography::DEFAULT_TOPOSETTINGS;
 use weather_pane::DEFAULT_WEATHERSETTINGS;
 use crate::fastlem_opt::generate_terrain;
 use crate::plant_maker::config::GreyscaleImage;
 use crate::plant_maker::soilmaker::init_soilmaker;
 use crate::soil_def::{base_choice_init, generate_selected_do, load_and_show_veg, SoilType, VegetationCollection, VegetationData, VegetationMaps};
-use crate::topography::{max_bounds_do, min_bounds_do, lod_do, erod_scale_do, apply_color_eroded, apply_color};
-use crate::ui::HeightmapInterface;
+use crate::topography::{max_bounds_do, min_bounds_do, lod_do, erod_scale_do, apply_color};
 use crate::utils::get_height;
 use crate::weather::{Climate, GenData, koppen_afam, koppen_as, koppen_aw, koppen_bsh, koppen_bsk, koppen_bwh, koppen_bwk, koppen_cfa, koppen_cfb, koppen_cfc, koppen_cwa, koppen_cwb, koppen_cwc, koppen_dfa, koppen_dfb, koppen_dfc, koppen_dsc, koppen_et};
 use crate::weather_settings::WeatherSettings;
@@ -329,7 +324,7 @@ fn open_file_do(program_data: &mut FileData) -> (FileData, PathBuf) {
     let dir = nfc.filename();
     if !dir.clone().into_os_string().is_empty() {
         let f = File::open(dir.clone()).expect("Error opening file.");
-        let mut data_n: FileData = match from_reader(f) {
+        let data_n: FileData = match from_reader(f) {
             Ok(x) => x,
             Err(e) => {
                 println!("Failed to load file: {}", e);
@@ -384,7 +379,7 @@ fn main() {
 
     let mut grid: Vec<GenData> = vec![];
 
-    let mut topo_settings: TopoSettings = TopoSettings {
+    let topo_settings: TopoSettings = TopoSettings {
         max_alt: 0.0,
         seed: Some(42949),
         min_bound: (0.0, 0.0),
@@ -398,7 +393,7 @@ fn main() {
         erosion_cycles: 0,
     };
 
-    let mut weather_settings: WeatherSettings = WeatherSettings {
+    let weather_settings: WeatherSettings = WeatherSettings {
         seed: Some(100000),
         koppen: Some(koppen_cfa()),
         latitude: 0,
@@ -841,8 +836,7 @@ fn main() {
                         _ => SoilType::Dirt
                     };
                     let i: ImageBuffer<Luma<u16>, Vec<u16>> = ImageBuffer::from_raw(8192, 8192, file.eroded_full.clone()).unwrap();
-                    let hydro: ImageBuffer<Luma<u8>, Vec<u8>> = ImageBuffer::from_raw(8192, 8192, file.discharge.clone()).unwrap();
-                    let soil = init_soilmaker(&mut ui.soil_preview, soil_base, &soil_veg_params.blocklist, &i, &hydro);
+                    let soil = init_soilmaker(&mut ui.soil_preview, soil_base, &soil_veg_params.blocklist, &i, file.topography.min_height, file.topography.max_height);
                     file.soil = soil;
                     //TODO VER POR QUÉ SALE MAL LA IMAGEN, SERÁ PORQUE ES RGB EN VEZ DE LUMA?
                     let x: ImageBuffer<Luma<u8>, Vec<u8>> = ImageBuffer::from_raw(1024, 1024, file.soil.clone()).unwrap();
@@ -986,7 +980,7 @@ fn main() {
                     let max_total = map.iter().as_slice().iter().max().unwrap();
 
                     for component in grid.as_mut_slice() {
-                        let mut h: i32;
+                        let h: i32;
                         match component.index.1 {
                             0 => {
                                 let dynamic = DynamicImage::from(map.clone());
@@ -1062,7 +1056,7 @@ fn main() {
                     let _ = replace::<bool>(&mut is_file_workspace, false);
                 }
                 Message::OpenFile => {
-                    let mut p = open_file_do(&mut file);
+                    let p = open_file_do(&mut file);
                     let s = p.1.to_str().unwrap().to_string();
                     workspace_path = s;
                     ui.main_window.set_label(format!("OpenBattlesim Map Generator - {}", workspace_path).as_str());

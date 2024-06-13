@@ -1,19 +1,16 @@
 use fastlem::core::parameters::TopographicalParameters;
 use fastlem::core::traits::Model;
-use fastlem::core::units::Elevation;
 use fastlem::lem::generator::TerrainGenerator;
 use fastlem::models::surface::builder::TerrainModel2DBulider;
 use fastlem::models::surface::sites::Site2D;
 use fltk::enums::ColorDepth;
 use fltk::image;
 use fltk::image::SharedImage;
-use fltk::prelude::{ImageExt, WidgetExt};
+use fltk::prelude::WidgetExt;
 use image_crate::{ImageBuffer, Luma};
 use noise::{NoiseFn, Perlin};
 use terrain_graph::edge_attributed_undirected::EdgeAttributedUndirectedGraph;
 use crate::FileData;
-use crate::topo_settings::TopoSettings;
-use crate::topography::DEFAULT_TOPOSETTINGS;
 
 pub fn generate_terrain(w: &mut impl WidgetExt, data: &mut FileData) {
     let bound_min = Site2D {x: data.topography.min_bound.0, y: data.topography.min_bound.1} ;

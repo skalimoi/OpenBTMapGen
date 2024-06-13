@@ -7,8 +7,6 @@ use fltk::enums::ColorDepth;
 use map_range::MapRange;
 use crate::{FileData, topography};
 use crate::erosion::world::{Vec2, World};
-use crate::topo_settings::NoiseTypesUi;
-use crate::topography::PREV_DIMENSIONS;
 use crate::utils::get_raw_u8;
 
 /// incremental = true

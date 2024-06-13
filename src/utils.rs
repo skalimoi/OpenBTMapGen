@@ -1,7 +1,6 @@
 use image_crate::{DynamicImage, GenericImageView, ImageBuffer, Luma, Pixel, Rgba};
 use map_range::CheckedMapRange;
 use noise::utils::{NoiseImage, NoiseMap};
-use crate::FileData;
 
 
 pub fn get_height(image: &DynamicImage, max: f64, min_value_total: u16, max_value_total: u16) -> i32 {
