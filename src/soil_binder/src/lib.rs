@@ -120,13 +120,11 @@ pub fn trindex() {
         .args([
             "-of",
             "PNG",
-            // "-ot",
-            // "UInt16",
+            "-ot",
+            "Byte",
             "-scale",
             "0",
-            "394",
-            "0",
-            "255",
+            "100",
             path::absolute("cache/tri.tif").unwrap().to_str().unwrap(),
             path::absolute("cache/tri.png").unwrap().to_str().unwrap(),
         ])

@@ -8,9 +8,9 @@ class UserInterface {open
   } {
     Fl_Window main_window {
       label {OpenBattlesim Map Generator} open
-      xywh {306 248 870 579} type Single color 55 visible
+      xywh {306 248 870 579} type Single color 55 hide
     } {
-      Fl_Menu_Bar menu_bar {open selected
+      Fl_Menu_Bar menu_bar {open
         xywh {-1 0 870 30} color 55
       } {}
       Fl_Tabs {} {open
@@ -121,8 +121,9 @@ class UserInterface {open
           Fl_Group {} {open
             xywh {0 60 870 520} box BORDER_BOX color 55
           } {
-            Fl_Text_Display {} {
-              xywh {18 532 832 33} box BORDER_FRAME color 39 selection_color 247
+            Fl_Progress erosion_progress {
+              label label
+              xywh {20 536 830 25} selection_color 239
             }
           }
           Fl_Group {} {
@@ -247,7 +248,7 @@ class UserInterface {open
           }
         }
         Fl_Group soil_pane {
-          label Soil open
+          label Soil open selected
           xywh {0 60 870 520} color 7
         } {
           Fl_Group {} {open
@@ -255,7 +256,7 @@ class UserInterface {open
           } {
             Fl_Box {} {
               label Soil
-              xywh {592 62 45 23} box FLAT_BOX color 55 selection_color 55
+              xywh {592 62 45 23} box FLAT_BOX color 53 selection_color 54
             }
             Fl_Button generate_selected_button {
               label {Generate selected}
@@ -343,6 +344,10 @@ class UserInterface {open
           Fl_Button next_veg {
             label Next
             xywh {355 415 130 25}
+          }
+          Fl_Output soil_output {
+            label Output
+            xywh {290 90 265 310} align 1
           }
         }
       }

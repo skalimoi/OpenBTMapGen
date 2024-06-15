@@ -60,10 +60,9 @@ pub fn init_soilmaker(f: &mut Frame, base_soil: SoilType, blocklist: &HashMap<So
     i.save("cache/gm.png");
     
 
-    // let mut i = image_crate::open("cache/tri.png").unwrap().to_luma8();
-    // let highest = *i.as_raw().iter().max().unwrap();
-    // imageproc::contrast::stretch_contrast_mut(&mut i, 6, 10);
-    // i.save("cache/tri.png");
+    let mut i = image_crate::open("cache/tri.png").unwrap().to_luma8();
+    imageproc::contrast::stretch_contrast_mut(&mut i, 0, 10);
+    i.save("cache/tri.png");
     // 
     // let mut i = image_crate::open("cache/ep.png").unwrap().to_luma8();
     // let highest = *i.as_raw().iter().max().unwrap();
@@ -73,9 +72,10 @@ pub fn init_soilmaker(f: &mut Frame, base_soil: SoilType, blocklist: &HashMap<So
     let mut base = open_image("cache/gm.png").expect("File should open.");
     let tri = open_image("cache/tri.png").expect("File should open.");
     let elevp = open_image("cache/ep.png").expect("");
+
+    blend(&mut base, &elevp, "lighten");
+    blend(&mut base, &tri, "soft_light");
     
-    blend(&mut base, &tri, "hard_light");
-    blend(&mut base, &elevp, "overlay");
 
     let raw = base.get_raw_pixels();
     
@@ -100,7 +100,8 @@ pub fn init_soilmaker(f: &mut Frame, base_soil: SoilType, blocklist: &HashMap<So
     let colormap = color_reduce::palette::BasePalette::new(
         color_vec
     );
-    quantize(&mut old_to_convert, &colormap, QuantizeMethod::Luma, None);
+    quantize(&mut old_to_convert, &colormap, QuantizeMethod::CIE2000, None);
+    i.save("soil_test_full.png");
     let i = image_old::imageops::resize(&old_to_convert, 1024, 1024, image_old::imageops::FilterType::Nearest);
     i.save("soil_test.png");
     f.set_image_scaled(None::<SharedImage>);
