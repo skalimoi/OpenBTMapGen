@@ -267,63 +267,68 @@ fn export_do(program_data: &mut FileData) {
     let mut nfc = dialog::NativeFileChooser::new(dialog::NativeFileChooserType::BrowseSaveDir);
     nfc.set_option(FileDialogOptions::SaveAsConfirm);
     nfc.show();
-    let dir = nfc.filename();
-    let dir_string = dir.to_str().unwrap().to_string();
-    println!("{}", dir_string.clone());
-    fs::create_dir(dir_string.clone() + "/terrain/").expect("Error creating terrain directory.");
-    fs::create_dir(dir_string.clone() + "/weather/").expect("Error creating weather directory.");
-    fs::create_dir(dir_string.clone() + "/textures/").expect("Error creating textures directory.");
-    fs::create_dir(dir_string.clone() + "/soils/").expect("Error creating soils directory.");
-    // TODO: check for empty vecs and throw error
-    // TODO: lossless rgb saving for texture creation when?
+    if nfc.filename().exists() {
+        let dir = nfc.filename();
+        let dir_string = dir.to_str().unwrap().to_string();
+        println!("{}", dir_string.clone());
+        fs::create_dir(dir_string.clone() + "/terrain/").expect("Error creating terrain directory.");
+        fs::create_dir(dir_string.clone() + "/weather/").expect("Error creating weather directory.");
+        fs::create_dir(dir_string.clone() + "/textures/").expect("Error creating textures directory.");
+        fs::create_dir(dir_string.clone() + "/soils/").expect("Error creating soils directory.");
+        // TODO: check for empty vecs and throw error
+        // TODO: lossless rgb saving for texture creation when?
 
-    for i in &program_data.weather_data {
-        let p = dir_string.clone() + format!("/weather/w_forecast_x{}_y{}_z{}.dat", i.index.0, i.index.1, i.index.2).as_str();
-        let f = WeatherBinaryData::new(i);
-        save_file(p, 0, &f).expect("Error exporting weather data!");
-    }
+        for i in &program_data.weather_data {
+            let p = dir_string.clone() + format!("/weather/w_forecast_x{}_y{}_z{}.dat", i.index.0, i.index.1, i.index.2).as_str();
+            let f = WeatherBinaryData::new(i);
+            save_file(p, 0, &f).expect("Error exporting weather data!");
+        }
 
-    {
-        let d: ImageBuffer<Luma<u8>, Vec<u8>> = image_crate::ImageBuffer::from_raw(8192, 8192, program_data.discharge.clone()).unwrap();
-        let i: ImageBuffer<Luma<u16>, Vec<u16>> = image_crate::ImageBuffer::from_raw(8192, 8192, program_data.eroded_full.clone()).unwrap();
-        for x in 0..8 {
-            for y in 0..8 {
-                let p = dir_string.clone() + format!("/terrain/h_map_tile_x{}_y{}.dat", x, y).as_str();
-                let p_2 = dir_string.clone() + format!("/water/s_map_tile_x{}_y{}.dat", x, y).as_str();
-                let part = image_crate::imageops::crop_imm(&i, 1024 * x, 1024 * y, 1024, 1024);
-                let part_2 = image_crate::imageops::crop_imm(&d, 1024 * x, 1024 * y, 1024, 1024);
-                let r = part.to_image().into_raw();
-                let r_2 = part_2.to_image().into_raw();
-                save_file(p, 0, &r).expect("Error exporting terrain tile!");
-                save_file(p_2, 0, &r_2).expect("Error exporting water tile!");
-                
-            }
-            }
-        for element in program_data.vegetation_maps.generated.iter() {
+        {
+            let d: ImageBuffer<Luma<u8>, Vec<u8>> = image_crate::ImageBuffer::from_raw(8192, 8192, program_data.discharge.clone()).unwrap();
+            let i: ImageBuffer<Luma<u16>, Vec<u16>> = image_crate::ImageBuffer::from_raw(8192, 8192, program_data.eroded_full.clone()).unwrap();
             for x in 0..8 {
                 for y in 0..8 {
-                    let mask: ImageBuffer<Luma<u8>, Vec<u8>> = image_crate::ImageBuffer::from_raw(1024, 1024, element.1.clone()).unwrap();
-                    let mask = resize(&mask, 8192, 8192, FilterType::Nearest);
-                    let part = image_crate::imageops::crop_imm(&mask, 1024 * x, 1024 * y, 1024, 1024);
+                    let p = dir_string.clone() + format!("/terrain/h_map_tile_x{}_y{}.dat", x, y).as_str();
+                    let p_2 = dir_string.clone() + format!("/water/s_map_tile_x{}_y{}.dat", x, y).as_str();
+                    let part = image_crate::imageops::crop_imm(&i, 1024 * x, 1024 * y, 1024, 1024);
+                    let part_2 = image_crate::imageops::crop_imm(&d, 1024 * x, 1024 * y, 1024, 1024);
                     let r = part.to_image().into_raw();
-                    let p = dir_string.clone() + format!("/textures/{}_x{}_y{}.bin", element.0.clone(), x, y).as_str();
+                    let r_2 = part_2.to_image().into_raw();
+                    fs::File::create(p.clone());
+                    fs::File::create(p_2.clone());
+                    save_file(p, 0, &r).expect("Error exporting terrain tile!");
+                    save_file(p_2, 0, &r_2).expect("Error exporting water tile!");
+
+                }
+            }
+            for element in program_data.vegetation_maps.generated.iter() {
+                let mask: ImageBuffer<Luma<u8>, Vec<u8>> = image_crate::ImageBuffer::from_raw(512, 512, element.1.clone()).unwrap();
+                let mask = resize(&mask, 8192, 8192, FilterType::Nearest);
+                for x in 0..8 {
+                    for y in 0..8 {
+                        let part = image_crate::imageops::crop_imm(&mask, 1024 * x, 1024 * y, 1024, 1024);
+                        let r = part.to_image().into_raw();
+                        let p = dir_string.clone() + format!("/textures/{}_x{}_y{}.bin", element.0.clone(), x, y).as_str();
+                        fs::File::create(p.clone());
+                        save_file(p, 0, &r).unwrap()
+                    }
+                }
+            }
+            let soil: ImageBuffer<Luma<u8>, Vec<u8>> = image_crate::ImageBuffer::from_raw(8192, 8192, program_data.soil.clone()).unwrap();
+            for x in 0..8 {
+                for y in 0..8 {
+                    let part = image_crate::imageops::crop_imm(&soil, 1024 * x, 1024 * y, 1024, 1024);
+                    let r = part.to_image().into_raw();
+                    let p = dir_string.clone() + format!("/soils/{}_x{}_y{}.dat", "soil_id", x, y).as_str();
+                    fs::File::create(p.clone());
                     save_file(p, 0, &r).unwrap()
                 }
             }
-            }
-        let soil: ImageBuffer<Luma<u8>, Vec<u8>> = image_crate::ImageBuffer::from_raw(1024, 1024, program_data.soil.clone()).unwrap();
-        let soil = resize(&soil, 8192, 8192, FilterType::Nearest);
 
-        for x in 0..8 {
-            for y in 0..8 {
-                let part = image_crate::imageops::crop_imm(&soil, 1024 * x, 1024 * y, 1024, 1024);
-                let r = part.to_image().into_raw();
-                let p = dir_string.clone() + format!("/soils/{}_x{}_y{}.dat", "soil_id", x, y).as_str();
-                save_file(p, 0, &r).unwrap()
-            }
         }
-        
-        }
+    }
+    
     }
     
 
@@ -789,22 +794,30 @@ fn main() {
                     gl_widget.show();
                 }
                 Message::NextVeg => {
-                    if index == index_list.len() {
+                    if index >= index_list.len() {
                         index = 0;
                     }
                     dbg!(&index_list.len());
-                    let element = index_list[index].clone();
-                    let map = file.vegetation_maps.clone().generated.get(&element).unwrap().clone();
-                    let b: ImageBuffer<Luma<u8>, Vec<u8>> = ImageBuffer::from_raw(512, 512, map.clone()).unwrap();
-                    let i = RgbImage::new(b.into_raw().as_slice(), 512, 512, ColorDepth::L8).unwrap();
-                    ui.veg_preview.set_image_scaled(None::<SharedImage>);
-                    ui.veg_preview.set_image_scaled(SharedImage::from_image(i).ok());
-                    ui.veg_preview.redraw();
-                    ui.veg_name.set_label(format!("Now displaying: {}", element).as_str());
-                    index+=1;
+                    dbg!(index);
+
+                    if !file.vegetation_maps.generated.is_empty() {
+                        let element = index_list.get(index).unwrap();
+                        let map = file.vegetation_maps.generated.get(element).unwrap();
+
+
+                        let b: ImageBuffer<Luma<u8>, Vec<u8>> = ImageBuffer::from_raw(512, 512, map.clone()).unwrap();
+                        let i = RgbImage::new(b.into_raw().as_slice(), 512, 512, ColorDepth::L8).unwrap();
+                        ui.veg_preview.set_image_scaled(None::<SharedImage>);
+                        ui.veg_preview.set_image_scaled(SharedImage::from_image(i).ok());
+                        ui.veg_preview.redraw();
+                        ui.veg_name.set_label(format!("Now displaying: {}", element).as_str());
+                        index+=1;
+                    }
+
                 }
                 Message::GenVegSel => {
                     file.vegetation_maps.generated.clear();
+                    index_list.clear();
                     generate_selected_do(&mut ui.vegetation_list, &mut soil_veg_params, &mut file);
                     dbg!(file.vegetation_maps.generated.keys());
                     for element in file.vegetation_maps.clone().generated.into_iter() {
@@ -910,7 +923,7 @@ fn main() {
                     let i: ImageBuffer<Luma<u16>, Vec<u16>> = ImageBuffer::from_raw(8192, 8192, file.eroded_full.clone()).unwrap();
                     let soil = init_soilmaker(&mut ui.soil_preview, soil_base, &soil_veg_params.blocklist, &i, file.topography.min_height, file.topography.max_height);
                     file.soil = soil;
-                    
+
                 }
                 Message::ImportHeightmap => {
                     heightmap_importer_win.show();
