@@ -22,7 +22,7 @@ pub fn calculate_hydrology_map(
             .into_iter()
             .map(|y| {
                 (0..edaphic_map.len()).into_iter().map(move |x| {
-                    let soil_map: ImageBuffer<Luma<u8>, Vec<u8>> = ImageBuffer::from_raw(1024, 1024, sim_args.soil_ids_map.clone()).unwrap();
+                    let soil_map: ImageBuffer<Luma<u8>, Vec<u8>> = ImageBuffer::from_raw(512, 512, sim_args.soil_ids_map.clone()).unwrap();
                     let soil = &sim_args.soils[&soil_map.get_pixel(x as u32, y as u32)[0]];
                     let depth_coefficient = (edaphic_map[(x, y)] / 100.0).min(1.0);
                     let water_supply = (sim_args.biom.groundwater + sim_args.biom.avg_rainfall_per_day)

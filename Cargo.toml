@@ -37,6 +37,8 @@ serde_json = "1.0.105"
 posterust = "0.0.1"
 simplelog = "0.12.2"
 photon-rs = {git = "https://github.com/silvia-odwyer/photon.git"}
+savefile = "0.17.4"
+savefile-derive = "0.17.4"
 
 
 [build-dependencies]

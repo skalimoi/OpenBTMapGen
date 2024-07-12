@@ -22,8 +22,10 @@ use std::path::PathBuf;
 
 use fltk::dialog::FileDialogOptions;
 use fltk::enums::{ColorDepth, Shortcut};
-use image_crate::imageops::FilterType;
+use image_crate::imageops::{FilterType, resize};
 use ron::de::from_reader;
+use savefile::save_file;
+use savefile_derive::Savefile;
 use serde::{Deserialize, Serialize};
 use simplelog::{ColorChoice, CombinedLogger, Config, LevelFilter, TerminalMode, TermLogger, WriteLogger};
 use soil_binder::{gdal_check, whitebox_check};
@@ -230,6 +232,37 @@ fn set_data(loaded_data: &mut FileData, data: &mut FileData) {
     let _ = replace::<FileData>(data, loaded_data.clone());
 }
 
+#[derive(Savefile)]
+struct WeatherBinaryData {
+    index: (i32, i32, i32),
+    temperature: Vec<f64>,
+    altitude: f64,
+    pressure: Vec<f64>,
+    humidity: Vec<f64>,
+    wind: Vec<(f32, f32, f32)>,
+    td: Vec<f64>
+}
+
+impl WeatherBinaryData {
+    fn new(from: &GenData) -> Self {
+        Self {
+            index: from.index,
+            temperature: from.temperature.iter().map(|x| {
+                f64::from(*x)
+            }).collect(),
+            altitude: from.altitude,
+            pressure: from.pressure.iter().map(|x| {
+                f64::from(*x)
+            }).collect(),
+            humidity: from.pressure.iter().map(|x| {
+                f64::from(*x)
+            }).collect(),
+            wind: from.wind.clone(),
+            td: from.td.clone(),
+        }
+    }
+}
+
 fn export_do(program_data: &mut FileData) {
     let mut nfc = dialog::NativeFileChooser::new(dialog::NativeFileChooserType::BrowseSaveDir);
     nfc.set_option(FileDialogOptions::SaveAsConfirm);
@@ -240,22 +273,61 @@ fn export_do(program_data: &mut FileData) {
     fs::create_dir(dir_string.clone() + "/terrain/").expect("Error creating terrain directory.");
     fs::create_dir(dir_string.clone() + "/weather/").expect("Error creating weather directory.");
     fs::create_dir(dir_string.clone() + "/textures/").expect("Error creating textures directory.");
+    fs::create_dir(dir_string.clone() + "/soils/").expect("Error creating soils directory.");
     // TODO: check for empty vecs and throw error
     // TODO: lossless rgb saving for texture creation when?
-    let s = ron::ser::to_string(&program_data.weather_data).expect("Error serializing weather data.");
-    fs::write(dir_string.clone() + "/weather/forecast.ron", s).expect("Error writing weather data.");
-    let i: ImageBuffer<Luma<u16>, Vec<u16>> = image_crate::ImageBuffer::from_raw(8192, 8192, program_data.eroded_full.clone()).unwrap();
-    i.save(dir_string.clone() + "/terrain/map.png").unwrap();
-    let d: ImageBuffer<Luma<u8>, Vec<u8>> = image_crate::ImageBuffer::from_raw(8192, 8192, program_data.discharge.clone()).unwrap();
-    d.save(dir_string.clone() + "/terrain/hydro.png").unwrap();
-    for element in program_data.vegetation_maps.generated.iter() {
-        let mask: ImageBuffer<Luma<u8>, Vec<u8>> = image_crate::ImageBuffer::from_raw(1024, 1024, element.1.clone()).unwrap();
-        mask.save(dir_string.clone() + format!("/textures/{}.png", element.0.clone()).as_str()).unwrap()
-    }
-    let soil: ImageBuffer<Luma<u8>, Vec<u8>> = image_crate::ImageBuffer::from_raw(1024, 1024, program_data.soil.clone()).unwrap();
-    soil.save(dir_string.clone() + "/terrain/soil_ids.png").unwrap();
 
-}
+    for i in &program_data.weather_data {
+        let p = dir_string.clone() + format!("/weather/w_forecast_x{}_y{}_z{}.dat", i.index.0, i.index.1, i.index.2).as_str();
+        let f = WeatherBinaryData::new(i);
+        save_file(p, 0, &f).expect("Error exporting weather data!");
+    }
+
+    {
+        let d: ImageBuffer<Luma<u8>, Vec<u8>> = image_crate::ImageBuffer::from_raw(8192, 8192, program_data.discharge.clone()).unwrap();
+        let i: ImageBuffer<Luma<u16>, Vec<u16>> = image_crate::ImageBuffer::from_raw(8192, 8192, program_data.eroded_full.clone()).unwrap();
+        for x in 0..8 {
+            for y in 0..8 {
+                let p = dir_string.clone() + format!("/terrain/h_map_tile_x{}_y{}.dat", x, y).as_str();
+                let p_2 = dir_string.clone() + format!("/water/s_map_tile_x{}_y{}.dat", x, y).as_str();
+                let part = image_crate::imageops::crop_imm(&i, 1024 * x, 1024 * y, 1024, 1024);
+                let part_2 = image_crate::imageops::crop_imm(&d, 1024 * x, 1024 * y, 1024, 1024);
+                let r = part.to_image().into_raw();
+                let r_2 = part_2.to_image().into_raw();
+                save_file(p, 0, &r).expect("Error exporting terrain tile!");
+                save_file(p_2, 0, &r_2).expect("Error exporting water tile!");
+                
+            }
+            }
+        for element in program_data.vegetation_maps.generated.iter() {
+            for x in 0..8 {
+                for y in 0..8 {
+                    let mask: ImageBuffer<Luma<u8>, Vec<u8>> = image_crate::ImageBuffer::from_raw(1024, 1024, element.1.clone()).unwrap();
+                    let mask = resize(&mask, 8192, 8192, FilterType::Nearest);
+                    let part = image_crate::imageops::crop_imm(&mask, 1024 * x, 1024 * y, 1024, 1024);
+                    let r = part.to_image().into_raw();
+                    let p = dir_string.clone() + format!("/textures/{}_x{}_y{}.bin", element.0.clone(), x, y).as_str();
+                    save_file(p, 0, &r).unwrap()
+                }
+            }
+            }
+        let soil: ImageBuffer<Luma<u8>, Vec<u8>> = image_crate::ImageBuffer::from_raw(1024, 1024, program_data.soil.clone()).unwrap();
+        let soil = resize(&soil, 8192, 8192, FilterType::Nearest);
+
+        for x in 0..8 {
+            for y in 0..8 {
+                let part = image_crate::imageops::crop_imm(&soil, 1024 * x, 1024 * y, 1024, 1024);
+                let r = part.to_image().into_raw();
+                let p = dir_string.clone() + format!("/soils/{}_x{}_y{}.dat", "soil_id", x, y).as_str();
+                save_file(p, 0, &r).unwrap()
+            }
+        }
+        
+        }
+    }
+    
+
+
 
 fn save_file_do(program_data: &mut FileData, is_workplace: &mut bool, path: &mut String, filename: &mut String) {
     if *is_workplace {
@@ -723,8 +795,8 @@ fn main() {
                     dbg!(&index_list.len());
                     let element = index_list[index].clone();
                     let map = file.vegetation_maps.clone().generated.get(&element).unwrap().clone();
-                    let b: ImageBuffer<Luma<u8>, Vec<u8>> = ImageBuffer::from_raw(1024, 1024, map.clone()).unwrap();
-                    let i = RgbImage::new(b.into_raw().as_slice(), 1024, 1024, ColorDepth::L8).unwrap();
+                    let b: ImageBuffer<Luma<u8>, Vec<u8>> = ImageBuffer::from_raw(512, 512, map.clone()).unwrap();
+                    let i = RgbImage::new(b.into_raw().as_slice(), 512, 512, ColorDepth::L8).unwrap();
                     ui.veg_preview.set_image_scaled(None::<SharedImage>);
                     ui.veg_preview.set_image_scaled(SharedImage::from_image(i).ok());
                     ui.veg_preview.redraw();
@@ -838,12 +910,7 @@ fn main() {
                     let i: ImageBuffer<Luma<u16>, Vec<u16>> = ImageBuffer::from_raw(8192, 8192, file.eroded_full.clone()).unwrap();
                     let soil = init_soilmaker(&mut ui.soil_preview, soil_base, &soil_veg_params.blocklist, &i, file.topography.min_height, file.topography.max_height);
                     file.soil = soil;
-                    //TODO VER POR QUÉ SALE MAL LA IMAGEN, SERÁ PORQUE ES RGB EN VEZ DE LUMA?
-                    let x: ImageBuffer<Luma<u8>, Vec<u8>> = ImageBuffer::from_raw(1024, 1024, file.soil.clone()).unwrap();
-                    x.save("soil_test_main.png");
-                    ui.soil_preview.set_image_scaled(None::<SharedImage>);
-                    ui.soil_preview.set_image_scaled(SharedImage::from_image(RgbImage::new(file.soil.as_slice(), 1024, 1024, ColorDepth::Rgb8).unwrap()).ok());
-                    ui.soil_preview.redraw();
+                    
                 }
                 Message::ImportHeightmap => {
                     heightmap_importer_win.show();
@@ -966,7 +1033,7 @@ fn main() {
                             terrain_material.clone(),
                             Arc::new(
                                 move |x, y| {
-                                    *map_b.clone().get_pixel(x as u32, y as u32).channels().first().unwrap() as f32 * 0.1
+                                    *map_b.clone().get_pixel(x as u32, y as u32).channels().first().unwrap() as f32 * 0.01
                                 }
                             ),
                             512.0,
@@ -1092,7 +1159,8 @@ fn main() {
                     }
                     if !file.soil.is_empty() {
                         ui.soil_preview.set_image_scaled(None::<SharedImage>);
-                        ui.soil_preview.set_image_scaled(SharedImage::from_image(RgbImage::new(file.soil.as_slice(), 1024, 1024, ColorDepth::Rgb8).unwrap()).ok());
+                        // TODO change to 1024?
+                        ui.soil_preview.set_image_scaled(SharedImage::from_image(RgbImage::new(file.soil.as_slice(), 8192, 8192, ColorDepth::Rgb8).unwrap()).ok());
                         ui.soil_preview.redraw();
                     }
 

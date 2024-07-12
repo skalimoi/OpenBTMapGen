@@ -11,7 +11,7 @@ use image_crate::{DynamicImage, ImageBuffer, Luma};
 use image_old::{ImageBuffer as buffer_old, Rgb as Rgb_old};
 
 use photon_rs::multiple::blend;
-use photon_rs::native::open_image;
+use photon_rs::native::{open_image, save_image};
 use soil_binder::{elevpercentile, geomorphons, georreference, trindex};
 use crate::plant_maker::config::GreyscaleImage;
 use crate::soil_def::SoilType;
@@ -77,10 +77,13 @@ pub fn init_soilmaker(f: &mut Frame, base_soil: SoilType, blocklist: &HashMap<So
     blend(&mut base, &tri, "soft_light");
     
 
-    let raw = base.get_raw_pixels();
+    save_image(base, "cache/fusion.png");
+    
+    let raw = image_crate::open("cache/fusion.png").unwrap().into_rgb8().into_raw();
     
     let mut old_to_convert: buffer_old<Rgb_old<u8>, Vec<u8>> = buffer_old::from_raw(8192, 8192, raw).unwrap();
 
+    old_to_convert.save("soil_without_quantize.png");
     /////////////////////
     
     let mut color_vec: Vec<[u8; 3]> = vec![];
@@ -101,12 +104,11 @@ pub fn init_soilmaker(f: &mut Frame, base_soil: SoilType, blocklist: &HashMap<So
         color_vec
     );
     quantize(&mut old_to_convert, &colormap, QuantizeMethod::CIE2000, None);
-    i.save("soil_test_full.png");
-    let i = image_old::imageops::resize(&old_to_convert, 1024, 1024, image_old::imageops::FilterType::Nearest);
-    i.save("soil_test.png");
+    old_to_convert.save("soil_test_full.png");   
+    let p = image_old::imageops::resize(&old_to_convert, 1024, 1024, image_old::imageops::FilterType::Nearest);
     f.set_image_scaled(None::<SharedImage>);
-    let s = RgbImage::new(i.as_raw().as_slice(), 1024, 1024, ColorDepth::Rgb8).unwrap();
-    f.set_image(SharedImage::from_image(s).ok());
+    let s = RgbImage::new(p.as_raw().as_slice(), 1024, 1024, ColorDepth::Rgb8).unwrap();
+    f.set_image_scaled(SharedImage::from_image(s).ok());
     f.redraw();
-    i.into_raw()
+    old_to_convert.into_raw()
 }

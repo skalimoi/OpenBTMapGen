@@ -46,14 +46,16 @@ pub struct VegetationCollection {
 pub fn generate_selected_do(c: &mut CheckBrowser, vegdata: &mut VegetationData, filedata: &mut FileData) {
     collect_values(c, vegdata);
     let h: ImageBuffer<Luma<u16>, Vec<u16>> = ImageBuffer::from_raw(8192, 8192, filedata.eroded_full.clone()).unwrap();
-    let h = image_old::imageops::resize(&h, 1024, 1024, FilterType::CatmullRom);
+    let h = image_old::imageops::resize(&h, 512, 512, FilterType::CatmullRom);
     let h = GreyscaleImage::new(h.into_raw().into_iter()
     .map(|x| x as f64)
     .collect());
+    let s: ImageBuffer<Luma<u8>, Vec<u8>> = ImageBuffer::from_raw(8192, 8192, filedata.soil.clone()).unwrap();
+    let s = image_old::imageops::resize(&s, 512, 512, FilterType::Nearest);
     let m = Map {
         biom: "PolarZone".parse().unwrap(),
         height_map_path: h,
-        texture_map_path: filedata.soil.clone(),
+        texture_map_path: s.into_raw(),
         height_conversion: 1.0,
         max_soil_depth: 300.0,
         pixel_size: 100.0

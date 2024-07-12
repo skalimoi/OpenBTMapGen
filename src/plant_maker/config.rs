@@ -222,7 +222,7 @@ impl SimConfig {
     // TODO: TERMINAR DE CONFIGURAR SOIL_DEF.RS
     pub fn calculate_probabilities(&self, mapdata: &mut VegetationMaps, vegetation_names: &[&str], _daylight_hours: i32, vegetation_collection: &mut VegetationCollection) {
         let soil_ids_map = GreyscaleImage::new(self.maps.texture_map_path.clone());
-        let x: ImageBuffer<Luma<u8>, Vec<u8>> = ImageBuffer::from_raw(1024, 1024, self.maps.texture_map_path.clone()).unwrap();
+        let x: ImageBuffer<Luma<u8>, Vec<u8>> = ImageBuffer::from_raw(512, 512, self.maps.texture_map_path.clone()).unwrap();
         x.save("soil_veg_test.png");
         for vegetation in vegetation_names {
             let probabilities_map = calculate_probabilities(
