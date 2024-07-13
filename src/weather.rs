@@ -1,6 +1,6 @@
 use std::f32::consts::E;
 use std::fs::File;
-use std::io::Write;
+use std::io::{Read, Write};
 use nalgebra::Vector3;
 use noise::{Fbm, NoiseFn, Perlin};
 use rand::{Rng, thread_rng};
@@ -391,7 +391,8 @@ pub fn koppen_dsc() -> Climate {
         diurnal_range: CONTINENTAL_POLAR_TEMP_RANGE
     }
 }
-
+use savefile::prelude::*;
+use savefile_derive::*;
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct GenData {
     pub index: (i32, i32, i32),
@@ -435,7 +436,7 @@ impl GenData {
     ) -> (f32, f32) {
         let mut td: f32 = 0.0;
 
-        td = (temperature - (factor.abs()));
+        td = temperature - (factor.abs());
 
         // if is_prec {
         //     td = tdprev;
@@ -453,7 +454,7 @@ impl GenData {
     #[deny(clippy::eq_op)]
     fn factor(season: Season, climate: &Climate, t: f64) -> f64 {
         let mut rng = thread_rng();
-        let mut r: Range<f64>;
+        let r: Range<f64>;
         if season == Season::Summer {
             r = match climate.summer.0 {
                 Humid => 0.0..(0.5 * t.abs()),

@@ -1,16 +1,15 @@
-use noise::{Billow, Curve, Fbm, MultiFractal, Perlin, Seedable, Simplex};
+use noise::Seedable;
 use fltk::prelude::{InputExt, MenuExt, ValuatorExt, WidgetExt};
-use fltk::app::Sender;
-use fltk::{enums, image, menu};
-use noise::utils::{Color, ImageRenderer, NoiseMap, NoiseMapBuilder, PlaneMapBuilder};
+use fltk::image;
+use noise::utils::{Color, ImageRenderer, NoiseMap};
 use image_crate::{ImageBuffer, Luma, Pixel, Rgb};
 use fltk::enums::ColorDepth;
 use fltk::image::{RgbImage, SharedImage};
 use map_range::MapRange;
-use crate::{FileData, Message};
+use crate::FileData;
 use crate::erosion::world::World;
-use crate::topo_settings::{NoiseTypesUi, TopoSettings};
-use crate::utils::{get_raw_u16, get_raw_u8};
+use crate::topo_settings::TopoSettings;
+use crate::utils::get_raw_u8;
 
 pub const DIMENSIONS: usize = 512;
 pub const PREV_DIMENSIONS: usize = 512;
@@ -133,7 +132,7 @@ pub fn color_eroded_image(file: &mut FileData) {
     for x in 0..512 {
         for y in 0..512 {
             let p = r.get_pixel(x, y);
-            let raw_altitude = ((p[0] / 32767) as f64 * file.topography.max_alt);
+            let raw_altitude = (p[0] / 32767) as f64 * file.topography.max_alt;
             let color = get_color(raw_altitude);
             i.put_pixel(x, y, Rgb::from(color));
         }

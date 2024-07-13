@@ -9,10 +9,11 @@ opt-level = 3
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+soil_binder = {path = "src/soil_binder"}
 errorfunctions = "0.2.0"
 fltk = { git = "https://github.com/fltk-rs/fltk-rs", features = ["enable-glwindow"] }
 image_crate = { package = "image", version =  "0.24.7" }
-image_newest = {package = "image", version= "0.23.14", default-features = false}
+image_old = {package = "image", version= "0.23.14", default-features = false}
 imageproc = "0.23.0"
 map-range = "0.1.2"
 nalgebra = { version = "0.32.3", features = ["serde-serialize"] }
@@ -29,10 +30,16 @@ ordered-float = {version = "4.2.0", features = ["serde"] }
 serde = { version = "1.0.196", features = ["derive"] }
 fastlem = "0.1.4"
 terrain-graph = "1.0.1"
+
 color-reduce = {git = "https://github.com/Seon82/color-reduce-rs.git"}
 serde_yaml = "0.9.25"
 serde_json = "1.0.105"
 posterust = "0.0.1"
+simplelog = "0.12.2"
+photon-rs = {git = "https://github.com/silvia-odwyer/photon.git"}
+savefile = "0.17.4"
+savefile-derive = "0.17.4"
+
 
 [build-dependencies]
 fl2rust = "0.5.17"

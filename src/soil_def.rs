@@ -1,16 +1,14 @@
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
-use std::ops::Deref;
 use fltk::browser::CheckBrowser;
-use fltk::button::Button;
 use fltk::prelude::{BrowserExt, MenuExt};
-use image_newest::{ImageBuffer, Luma};
-use image_newest::imageops::FilterType;
+use image_old::{ImageBuffer, Luma};
+use image_old::imageops::FilterType;
 use nalgebra::Vector3;
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 use crate::FileData;
-use crate::soil::config::{Biom, GreyscaleImage, Map, SimConfig, Soil, SunConfig, Vegetation};
+use crate::plant_maker::config::{Biom, GreyscaleImage, Map, SimConfig, Soil, SunConfig, Vegetation};
 
 #[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq, Hash)]
 pub enum SoilType {
@@ -48,14 +46,16 @@ pub struct VegetationCollection {
 pub fn generate_selected_do(c: &mut CheckBrowser, vegdata: &mut VegetationData, filedata: &mut FileData) {
     collect_values(c, vegdata);
     let h: ImageBuffer<Luma<u16>, Vec<u16>> = ImageBuffer::from_raw(8192, 8192, filedata.eroded_full.clone()).unwrap();
-    let h = image_newest::imageops::resize(&h, 1024, 1024, FilterType::CatmullRom);
+    let h = image_old::imageops::resize(&h, 512, 512, FilterType::CatmullRom);
     let h = GreyscaleImage::new(h.into_raw().into_iter()
     .map(|x| x as f64)
     .collect());
+    let s: ImageBuffer<Luma<u8>, Vec<u8>> = ImageBuffer::from_raw(8192, 8192, filedata.soil.clone()).unwrap();
+    let s = image_old::imageops::resize(&s, 512, 512, FilterType::Nearest);
     let m = Map {
-        biom: "ArcticZone".parse().unwrap(),
+        biom: "PolarZone".parse().unwrap(),
         height_map_path: h,
-        texture_map_path: filedata.soil.clone(),
+        texture_map_path: s.into_raw(),
         height_conversion: 1.0,
         max_soil_depth: 300.0,
         pixel_size: 100.0
