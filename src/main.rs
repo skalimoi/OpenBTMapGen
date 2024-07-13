@@ -289,8 +289,9 @@ fn export_do(program_data: &mut FileData) {
             let i: ImageBuffer<Luma<u16>, Vec<u16>> = image_crate::ImageBuffer::from_raw(8192, 8192, program_data.eroded_full.clone()).unwrap();
             for x in 0..8 {
                 for y in 0..8 {
+                    dbg!(x, y);
                     let p = dir_string.clone() + format!("/terrain/h_map_tile_x{}_y{}.dat", x, y).as_str();
-                    let p_2 = dir_string.clone() + format!("/water/s_map_tile_x{}_y{}.dat", x, y).as_str();
+                    let p_2 = dir_string.clone() + format!("/terrain/s_map_tile_x{}_y{}.dat", x, y).as_str();
                     let part = image_crate::imageops::crop_imm(&i, 1024 * x, 1024 * y, 1024, 1024);
                     let part_2 = image_crate::imageops::crop_imm(&d, 1024 * x, 1024 * y, 1024, 1024);
                     let r = part.to_image().into_raw();
@@ -307,6 +308,7 @@ fn export_do(program_data: &mut FileData) {
                 let mask = resize(&mask, 8192, 8192, FilterType::Nearest);
                 for x in 0..8 {
                     for y in 0..8 {
+                        dbg!(x, y);
                         let part = image_crate::imageops::crop_imm(&mask, 1024 * x, 1024 * y, 1024, 1024);
                         let r = part.to_image().into_raw();
                         let p = dir_string.clone() + format!("/textures/{}_x{}_y{}.bin", element.0.clone(), x, y).as_str();
@@ -318,6 +320,7 @@ fn export_do(program_data: &mut FileData) {
             let soil: ImageBuffer<Luma<u8>, Vec<u8>> = image_crate::ImageBuffer::from_raw(8192, 8192, program_data.soil.clone()).unwrap();
             for x in 0..8 {
                 for y in 0..8 {
+                    dbg!(x, y);
                     let part = image_crate::imageops::crop_imm(&soil, 1024 * x, 1024 * y, 1024, 1024);
                     let r = part.to_image().into_raw();
                     let p = dir_string.clone() + format!("/soils/{}_x{}_y{}.dat", "soil_id", x, y).as_str();
