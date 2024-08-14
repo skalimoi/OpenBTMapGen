@@ -1,0 +1,8 @@
+{
+    "Moss": (
+        energy_demand: 500.0,
+        water_demand: 0.3,
+        soil_demand: "Stone",
+        soil_depth_demand: 1.0,
+    ),
+}

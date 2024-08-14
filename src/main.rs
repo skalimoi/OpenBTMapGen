@@ -6,13 +6,10 @@ use crate::topo_settings::TopoSettings;
 use fltk::app::Sender;
 use fltk::image::{RgbImage, SharedImage};
 use fltk::{*, prelude::*};
-use image_crate::{DynamicImage, GenericImageView, ImageBuffer, Luma, Pixel};
+use image_crate::{DynamicImage, GenericImageView, ImageBuffer, Luma, Pixel, Rgb};
 use noise::{Fbm, Perlin, Seedable};
 use rand::{Rng, thread_rng};
 
-use std::sync::Arc;
-use fltk::window::GlutWindow;
-use three_d::{AmbientLight, Camera, ClearState, ColorMaterial, Context, CpuMaterial, CpuMesh, CpuTexture, Cull, DirectionalLight, FromCpuMaterial, Gm, LightingModel, Mat4, Mesh, PhysicalMaterial, RenderTarget, Srgba, Terrain, Vec3, Viewport};
 use std::default::Default;
 use std::fs::File;
 use std::fs;
@@ -20,10 +17,12 @@ use std::mem::replace;
 use std::ops::Index;
 use std::path::PathBuf;
 
-use fltk::dialog::FileDialogOptions;
+use fltk::dialog::{alert, alert_default, FileDialogOptions};
 use fltk::enums::{ColorDepth, Shortcut};
 use image_crate::imageops::{FilterType, resize};
+use imageproc::definitions::{HasBlack, HasWhite};
 use ron::de::from_reader;
+use ron::ser::PrettyConfig;
 use savefile::save_file;
 use savefile_derive::Savefile;
 use serde::{Deserialize, Serialize};
@@ -32,9 +31,9 @@ use soil_binder::{gdal_check, whitebox_check};
 use topography::DEFAULT_TOPOSETTINGS;
 use weather_pane::DEFAULT_WEATHERSETTINGS;
 use crate::fastlem_opt::generate_terrain;
-use crate::plant_maker::config::GreyscaleImage;
+use crate::plant_maker::config::{GreyscaleImage, Soil, Vegetation};
 use crate::plant_maker::soilmaker::init_soilmaker;
-use crate::soil_def::{base_choice_init, generate_selected_do, load_and_show_veg, SoilType, VegetationCollection, VegetationData, VegetationMaps};
+use crate::soil_def::{generate_selected_do, SoilType, VegetationCollection, VegetationData, VegetationMaps};
 use crate::topography::{max_bounds_do, min_bounds_do, lod_do, erod_scale_do, apply_color};
 use crate::utils::get_height;
 use crate::weather::{Climate, GenData, koppen_afam, koppen_as, koppen_aw, koppen_bsh, koppen_bsk, koppen_bwh, koppen_bwk, koppen_cfa, koppen_cfb, koppen_cfc, koppen_cwa, koppen_cwb, koppen_cwc, koppen_dfa, koppen_dfb, koppen_dfc, koppen_dsc, koppen_et};
@@ -125,16 +124,19 @@ enum Message {
     FullPreviewSingular,
     GenVegSel,
     GenSoil,
-    DirtCheck,
-    LoamCheck,
-    StoneCheck,
-    GravelCheck,
-    SiltCheck,
-    SandCheck,
-    ClayCheck,
     NextVeg,
     Vis2D,
     Vis3D,
+    AddSoil,
+    SoilOKButton,
+    VegOKButton,
+    AddVeg,
+    SoilRemoveButton,
+    SoilSaveButton,
+    SoilLoadButton,
+    VegLoadButton,
+    VegSaveButton,
+    VegRemoveButton,
 }
 
 struct ViewState {
@@ -149,7 +151,6 @@ enum ViewMode {
     TwoD,
     ThreeD
 }
-
 
 fn menu_do(w: &mut impl MenuExt, sender: &Sender<Message>) {
     w.add_emit(
@@ -195,11 +196,6 @@ fn menu_do(w: &mut impl MenuExt, sender: &Sender<Message>) {
         Message::ImportHeightmap
     );
 }
-
-fn heightmap_browse_button_do(program_data: &mut FileData) {
-
-}
-
 fn new_do(program_data: &mut FileData) {
     let clean = FileData {
         topography: DEFAULT_TOPOSETTINGS,
@@ -263,7 +259,7 @@ impl WeatherBinaryData {
     }
 }
 
-fn export_do(program_data: &mut FileData) {
+fn export_do(program_data: &mut FileData, soils: &HashMap<String, Soil>) {
     let mut nfc = dialog::NativeFileChooser::new(dialog::NativeFileChooserType::BrowseSaveDir);
     nfc.set_option(FileDialogOptions::SaveAsConfirm);
     nfc.show();
@@ -275,16 +271,39 @@ fn export_do(program_data: &mut FileData) {
         fs::create_dir(dir_string.clone() + "/weather/").expect("Error creating weather directory.");
         fs::create_dir(dir_string.clone() + "/textures/").expect("Error creating textures directory.");
         fs::create_dir(dir_string.clone() + "/soils/").expect("Error creating soils directory.");
-        // TODO: check for empty vecs and throw error
-        // TODO: lossless rgb saving for texture creation when?
 
+        #[derive(Savefile)]
+        struct HeightData {
+            min: i32,
+            max: i32,
+        }
+        
+        #[derive(Savefile)]
+        struct SoilData {
+            soil_value:  HashMap<u8, String>
+        }
+        
+        let mut soil: HashMap<u8, String> = HashMap::new();
+        
+        for element in soils.iter() {
+            soil.insert(element.1.id, element.0.clone());
+        }
+        
+        let height: HeightData = HeightData {min: program_data.topography.min_height, max: program_data.topography.max_height};
+        
+        let soil_save : SoilData = SoilData {soil_value: soil};
+        
+        save_file(dir_string.clone() + "/master1.dat", 0, &height).expect("Error exporting height data!");
+        
+        save_file(dir_string.clone() + "/master2.dat", 0, &soil_save).expect("Error exporting soil data!");
+        
         for i in &program_data.weather_data {
             let p = dir_string.clone() + format!("/weather/w_forecast_x{}_y{}_z{}.dat", i.index.0, i.index.1, i.index.2).as_str();
             let f = WeatherBinaryData::new(i);
             save_file(p, 0, &f).expect("Error exporting weather data!");
         }
 
-        {
+        if !program_data.eroded_full.is_empty() {
             let d: ImageBuffer<Luma<u8>, Vec<u8>> = image_crate::ImageBuffer::from_raw(8192, 8192, program_data.discharge.clone()).unwrap();
             let i: ImageBuffer<Luma<u16>, Vec<u16>> = image_crate::ImageBuffer::from_raw(8192, 8192, program_data.eroded_full.clone()).unwrap();
             for x in 0..8 {
@@ -303,32 +322,48 @@ fn export_do(program_data: &mut FileData) {
 
                 }
             }
-            for element in program_data.vegetation_maps.generated.iter() {
-                let mask: ImageBuffer<Luma<u8>, Vec<u8>> = image_crate::ImageBuffer::from_raw(512, 512, element.1.clone()).unwrap();
-                let mask = resize(&mask, 8192, 8192, FilterType::Nearest);
-                for x in 0..8 {
-                    for y in 0..8 {
-                        dbg!(x, y);
-                        let part = image_crate::imageops::crop_imm(&mask, 1024 * x, 1024 * y, 1024, 1024);
-                        let r = part.to_image().into_raw();
-                        let p = dir_string.clone() + format!("/textures/{}_x{}_y{}.bin", element.0.clone(), x, y).as_str();
-                        fs::File::create(p.clone());
-                        save_file(p, 0, &r).unwrap()
+
+            if !program_data.vegetation_maps.generated.is_empty() {
+                for element in program_data.vegetation_maps.generated.iter() {
+                    let mask: ImageBuffer<Luma<u8>, Vec<u8>> = image_crate::ImageBuffer::from_raw(512, 512, element.1.clone()).unwrap();
+                    let mask = resize(&mask, 8192, 8192, FilterType::Nearest);
+                    for x in 0..8 {
+                        for y in 0..8 {
+                            dbg!(x, y);
+                            let part = image_crate::imageops::crop_imm(&mask, 1024 * x, 1024 * y, 1024, 1024);
+                            let r = part.to_image().into_raw();
+                            let p = dir_string.clone() + format!("/textures/{}_x{}_y{}.bin", element.0.clone(), x, y).as_str();
+                            fs::File::create(p.clone());
+                            save_file(p, 0, &r).unwrap()
+                        }
                     }
                 }
             }
-            let soil: ImageBuffer<Luma<u8>, Vec<u8>> = image_crate::ImageBuffer::from_raw(8192, 8192, program_data.soil.clone()).unwrap();
-            for x in 0..8 {
-                for y in 0..8 {
-                    dbg!(x, y);
-                    let part = image_crate::imageops::crop_imm(&soil, 1024 * x, 1024 * y, 1024, 1024);
-                    let r = part.to_image().into_raw();
-                    let p = dir_string.clone() + format!("/soils/{}_x{}_y{}.dat", "soil_id", x, y).as_str();
-                    fs::File::create(p.clone());
-                    save_file(p, 0, &r).unwrap()
+            if !program_data.soil.is_empty() {
+                let soil: ImageBuffer<Rgb<u8>, Vec<u8>> = image_crate::ImageBuffer::from_raw(8192, 8192, program_data.soil.clone()).unwrap();
+                for id in soils {
+                    let mut i : ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::new(8192, 8192);
+                    for x in 0..8192 {
+                        for y in 0..8192 {
+                            if *soil.get_pixel(x, y) == Rgb::from([id.1.id, id.1.id, id.1.id]) {
+                                i.put_pixel(x, y, Rgb::white());
+                            } else { 
+                                i.put_pixel(x, y, Rgb::black());
+                            }
+                        }
+                    }
+                    for x in 0..8 {
+                        for y in 0..8 {
+                            dbg!(x, y);
+                            let part = image_crate::imageops::crop_imm(&i, 1024 * x, 1024 * y, 1024, 1024);
+                            let r = part.to_image().into_raw();
+                            let p = dir_string.clone() + format!("/soils/id{}_x{}_y{}.dat", id.1.id, x, y).as_str();
+                            fs::File::create(p.clone());
+                            save_file(p, 0, &r).unwrap()
+                        }
+                    }
                 }
             }
-
         }
     }
     
@@ -435,7 +470,9 @@ fn seed_random_do(
 }
 
 
+#[deny(clippy::never_loop)]
 fn main() {
+    fs::remove_dir_all("cache");
     CombinedLogger::init(
         vec![
             TermLogger::new(LevelFilter::Trace, Config::default(), TerminalMode::Mixed, ColorChoice::Auto),
@@ -452,7 +489,7 @@ fn main() {
         mode: Init,
         hour: 0,
         layer: 0,
-        proj: ViewMode::ThreeD
+        proj: ViewMode::TwoD
     };
 
     let climates: [Climate; 18] = [koppen_cfa(), koppen_cfb(), koppen_cfc(), koppen_dfb(), koppen_dfc(), koppen_dfa(), koppen_cwc(), koppen_cwb(), koppen_cwa(), koppen_et(), koppen_afam(), koppen_as(), koppen_aw(), koppen_dsc(), koppen_bsh(), koppen_bsk(), koppen_bwh(), koppen_bwk()];
@@ -531,16 +568,16 @@ fn main() {
     let mut win = ui.main_window.clone();
     let win_icon = image::PngImage::load("icons/win.png").unwrap();
     win.set_icon(Some(win_icon.clone()));
-    let (x, y, w, h) = (ui.weather_preview.x(), ui.weather_preview.y(), ui.weather_preview.w(), ui.weather_preview.h());
-    // create gl window
-    let mut gl_widget = GlutWindow::new(x, y, w, h, None);
-    // let mut gl_win = GlutWindow::new(x, y, w, h, None);
-    gl_widget.set_mode(enums::Mode::Opengl3);
-    ui.weather_preview.add(&gl_widget);
+    // let (x, y, w, h) = (ui.weather_preview.x(), ui.weather_preview.y(), ui.weather_preview.w(), ui.weather_preview.h());
+    // // create gl window
+    // let mut gl_widget = GlutWindow::new(x, y, w, h, None);
+    // // let mut gl_win = GlutWindow::new(x, y, w, h, None);
+    // gl_widget.set_mode(enums::Mode::Opengl3);
+    // ui.weather_preview.add(&gl_widget);
     win.end();
-    gl_widget.end();
+    // gl_widget.end();
     win.show();
-    gl_widget.show();
+    // gl_widget.show();
 
     ui.turn_right_vis.set_image(Some(SharedImage::load("icons/turn_right.png").unwrap()));
     ui.turn_left_vis.set_image(Some(SharedImage::load("icons/turn_left.png").unwrap()));
@@ -552,112 +589,112 @@ fn main() {
 
     /////////////
 
-    let viewport = Viewport {
-        x: (0 - x) + 30, // don't know why tf it must be like this in order for the viewport to be aligned with the widget
-        y: 0 - y,
-        width: w as u32,
-        height: h as u32,
-    };
+    // let viewport = Viewport {
+    //     x: (0 - x) + 30, // don't know why tf it must be like this in order for the viewport to be aligned with the widget
+    //     y: 0 - y,
+    //     width: w as u32,
+    //     height: h as u32,
+    // };
 
 
-    let gl = unsafe {
-        three_d::context::Context::from_loader_function(|s| gl_widget.get_proc_address(s) as *const _)
-    };
+    // let gl = unsafe {
+    //     three_d::context::Context::from_loader_function(|s| gl_widget.get_proc_address(s) as *const _)
+    // };
 
     // and this is three_d context
-    let context = Context::from_gl_context(Arc::new(gl)).unwrap();
-
-    context.set_cull(Cull::Back);
-
-    let mut camera = Camera::new_orthographic(viewport,
-                                              Vec3::new(0.0, 256.0, 0.0),
-                                              Vec3::new(255.0, 128.0, 255.0),
-                                              Vec3::new(0.0, 1.0, 0.0),
-                                              768.0,
-                                              0.1,
-                                              10000.0
-    );
-
-    let m: CpuTexture = CpuTexture::default();
-
-    let cpu_mat = CpuMaterial {
-        name: "".to_string(),
-        albedo: Default::default(),
-        albedo_texture: Some(m),
-        metallic: 0.0,
-        roughness: 0.0,
-        occlusion_metallic_roughness_texture: None,
-        metallic_roughness_texture: None,
-        occlusion_strength: 0.0,
-        occlusion_texture: None,
-        normal_scale: 0.0,
-        normal_texture: None,
-        emissive: Default::default(),
-        emissive_texture: Default::default(),
-        alpha_cutout: None,
-        lighting_model: LightingModel::Phong,
-        index_of_refraction: 0.0,
-        transmission: 0.0,
-        transmission_texture: None,
-    };
-
-    // three_d_asset::io::load(&["example_images/eroded_cache.png"]).unwrap().deserialize("").unwrap();
-
-    let terrain_material = PhysicalMaterial::new_opaque(&context, &cpu_mat);
-
-    let heightmap_opt_dyn = DynamicImage::new_luma16(512, 512);
-
-    let heightmap_opt = heightmap_opt_dyn.to_luma16();
-
-    let ambient = AmbientLight::new(&context, 0.4, Srgba::WHITE);
-    let directional = DirectionalLight::new(&context, 0.4, Srgba::WHITE, &Vec3::new(0.0, -1.0, 100.0));
-    let mut terrain = Terrain::new(
-        &context,
-        terrain_material.clone(),
-        Arc::new(
-            move |x, y| {
-                *heightmap_opt.get_pixel(x as u32, y as u32).channels().first().unwrap() as f32 * 0.001
-            }
-        ),
-        512.0,
-        1.0,
-        three_d::prelude::Vec2::new(255.0, 255.0)
-    );
-
-    let mut mesh_v: Vec<Gm<Mesh, ColorMaterial>> = vec![];
+    // let context = Context::from_gl_context(Arc::new(gl)).unwrap();
+    // 
+    // context.set_cull(Cull::Back);
+    // 
+    // let mut camera = Camera::new_orthographic(viewport,
+    //                                           Vec3::new(0.0, 256.0, 0.0),
+    //                                           Vec3::new(255.0, 128.0, 255.0),
+    //                                           Vec3::new(0.0, 1.0, 0.0),
+    //                                           768.0,
+    //                                           0.1,
+    //                                           10000.0
+    // );
+    // 
+    // let m: CpuTexture = CpuTexture::default();
+    // 
+    // let cpu_mat = CpuMaterial {
+    //     name: "".to_string(),
+    //     albedo: Default::default(),
+    //     albedo_texture: Some(m),
+    //     metallic: 0.0,
+    //     roughness: 0.0,
+    //     occlusion_metallic_roughness_texture: None,
+    //     metallic_roughness_texture: None,
+    //     occlusion_strength: 0.0,
+    //     occlusion_texture: None,
+    //     normal_scale: 0.0,
+    //     normal_texture: None,
+    //     emissive: Default::default(),
+    //     emissive_texture: Default::default(),
+    //     alpha_cutout: None,
+    //     lighting_model: LightingModel::Phong,
+    //     index_of_refraction: 0.0,
+    //     transmission: 0.0,
+    //     transmission_texture: None,
+    // };
+    // 
+    // // three_d_asset::io::load(&["example_images/eroded_cache.png"]).unwrap().deserialize("").unwrap();
+    // 
+    // let terrain_material = PhysicalMaterial::new_opaque(&context, &cpu_mat);
+    // 
+    // let heightmap_opt_dyn = DynamicImage::new_luma16(512, 512);
+    // 
+    // let heightmap_opt = heightmap_opt_dyn.to_luma16();
+    // 
+    // let ambient = AmbientLight::new(&context, 0.4, Srgba::WHITE);
+    // let directional = DirectionalLight::new(&context, 0.4, Srgba::WHITE, &Vec3::new(0.0, -1.0, 100.0));
+    // let mut terrain = Terrain::new(
+    //     &context,
+    //     terrain_material.clone(),
+    //     Arc::new(
+    //         move |x, y| {
+    //             *heightmap_opt.get_pixel(x as u32, y as u32).channels().first().unwrap() as f32 * 0.001
+    //         }
+    //     ),
+    //     512.0,
+    //     1.0,
+    //     three_d::prelude::Vec2::new(255.0, 255.0)
+    // );
+    // 
+    // let mut mesh_v: Vec<Gm<Mesh, ColorMaterial>> = vec![];
 
     //// RANDOMIZER ////
 
-    let mut rng = thread_rng();
+    let rng = thread_rng();
 
     ////           ////
 
 
-    for x in 0..file.weather.clone().grid_size {
-        for y in 0..6 {
-            for z in 0..file.weather.clone().grid_size {
-                let color: (u8, u8, u8) = (rng.gen_range(0..256) as u8, rng.gen_range(0..256) as u8, rng.gen_range(0..256) as u8);
-                let mut cube = Gm::new(
-                    Mesh::new(&context, &CpuMesh::cube()),
-                    ColorMaterial::from_cpu_material(&context,
-                                                     &CpuMaterial {
-                                                         albedo: Srgba {
-                                                             r: color.0,
-                                                             g: color.1,
-                                                             b: color.2,
-                                                             a: 10,
-                                                         },
-                                                         ..Default::default()
-                                                     },
-                    )
-                );
-                cube.set_transformation(Mat4::from_translation(Vec3::new(32.0 * x as f32, 32.0 * (y + 6) as f32, 32.0 * z as f32)) * Mat4::from_scale(32.0));
-                mesh_v.push(cube);
-            }
-        }
-    }
-
-    let mut frame = 0;
+    // for x in 0..file.weather.clone().grid_size {
+    //     for y in 0..6 {
+    //         for z in 0..file.weather.clone().grid_size {
+    //             let color: (u8, u8, u8) = (rng.gen_range(0..256) as u8, rng.gen_range(0..256) as u8, rng.gen_range(0..256) as u8);
+    //             let mut cube = Gm::new(
+    //                 Mesh::new(&context, &CpuMesh::cube()),
+    //                 ColorMaterial::from_cpu_material(&context,
+    //                                                  &CpuMaterial {
+    //                                                      albedo: Srgba {
+    //                                                          r: color.0,
+    //                                                          g: color.1,
+    //                                                          b: color.2,
+    //                                                          a: 10,
+    //                                                      },
+    //                                                      ..Default::default()
+    //                                                  },
+    //                 )
+    //             );
+    //             cube.set_transformation(Mat4::from_translation(Vec3::new(32.0 * x as f32, 32.0 * (y + 6) as f32, 32.0 * z as f32)) * Mat4::from_scale(32.0));
+    //             mesh_v.push(cube);
+    //         }
+    //     }
+    // }
+    // 
+    // let mut frame = 0;
 
     /////////////
 
@@ -727,23 +764,11 @@ fn main() {
 
     ui.prepare_soil_button.emit(s, Message::GenSoil);
 
-    ui.dirt_check.emit(s, Message::DirtCheck);
+    
 
-    ui.loam_check.emit(s, Message::LoamCheck);
-
-    ui.silt_check.emit(s, Message::SiltCheck);
-
-    ui.clay_check.emit(s, Message::ClayCheck);
-
-    ui.stone_check.emit(s, Message::StoneCheck);
-
-    ui.sand_check.emit(s, Message::SandCheck);
-
-    ui.gravel_check.emit(s, Message::GravelCheck);
-
-    let target = *camera.target();
-
-    let camera_y = camera.position().y;
+    // let target = *camera.target();
+    // 
+    // let camera_y = camera.position().y;
 
     let win_icon = image::PngImage::load("icons/win.png").unwrap();
     let mut heightmap_importer_ui = ui::HeightmapInterface::heightmap_dialog();
@@ -754,47 +779,226 @@ fn main() {
     heightmap_importer_ui.import_button.emit(s, Message::ImportButton);
     heightmap_importer_ui.file_box.emit(s, Message::FileBox);
 
+    let win_icon = image::PngImage::load("icons/win.png").unwrap();
+    let mut soil_add_ui = ui::SoilInterface::soil_dialog();
+    let mut soil_add_win = soil_add_ui.soil_dialog_win.clone();
+    soil_add_win.set_icon(Some(win_icon));
+    soil_add_win.hide();
+    
+    soil_add_ui.soil_ok_button.emit(s, Message::SoilOKButton);
+
+    let win_icon = image::PngImage::load("icons/win.png").unwrap();
+    let mut veg_add_ui = ui::VegetationInterface::vegetation_dialog();
+    let mut veg_add_win = veg_add_ui.vegetation_dialog_win.clone();
+    veg_add_win.set_icon(Some(win_icon));
+    veg_add_win.hide();
+    veg_add_ui.vegetation_ok_button.emit(s, Message::VegOKButton);
+
+    ui.add_soil_button.emit(s, Message::AddSoil);
+    ui.remove_soil_button.emit(s, Message::SoilRemoveButton);
     ui.twod_vis.emit(s, Message::Vis2D);
     ui.threed_vis.emit(s, Message::Vis3D);
     
-    base_choice_init(&mut ui.base_soil_choice);
-    load_and_show_veg(&mut ui.vegetation_list);
+    // load_and_show_veg(&mut ui.vegetation_list);
 
-    let mut soilchoices: HashMap<SoilType, bool> = HashMap::new();
-    soilchoices.insert(SoilType::Dirt, false);
-    soilchoices.insert(SoilType::Silt, false);
-    soilchoices.insert(SoilType::Stone, false);
-    soilchoices.insert(SoilType::Gravel, false);
-    soilchoices.insert(SoilType::Loam, false);
-    soilchoices.insert(SoilType::Clay, false);
-    soilchoices.insert(SoilType::Sand, false);
+    let soilchoices: HashMap<SoilType, bool> = HashMap::new();
     
-
-    let mut soil_veg_params = VegetationData {
+    let soil_veg_params = VegetationData {
         base: SoilType::Stone,
         blocklist: soilchoices,
         vegetationlist: HashMap::new()
     };
     
+    let mut vegetation_master: HashMap<String, Vegetation> = HashMap::new();
 
     let mut dir: PathBuf = PathBuf::new();
 
     ui.next_veg.emit(s, Message::NextVeg);
+    
+    ui.save_soil_button.emit(s, Message::SoilSaveButton);
+    
+    ui.load_soil_button.emit(s, Message::SoilLoadButton);
+    
+    ui.load_veg_button.emit(s, Message::VegLoadButton);
+    
+    ui.add_veg_button.emit(s, Message::AddVeg);
+    
+    ui.remove_veg_button.emit(s, Message::VegRemoveButton);
+    
+    ui.save_veg_list_button.emit(s, Message::VegSaveButton);
 
     let mut index_list: Vec<String> = Vec::new();
 
     let mut index = 0;
 
+    let mut soil_master: HashMap<String, Soil> = HashMap::new();
+    
+    ui.blend_mode_first.add_choice("overlay");
+    ui.blend_mode_first.add_choice("over");
+    ui.blend_mode_first.add_choice("xor");
+    ui.blend_mode_first.add_choice("multiply");
+    ui.blend_mode_first.add_choice("burn");
+    ui.blend_mode_first.add_choice("soft_light");
+    ui.blend_mode_first.add_choice("hard_light");
+    ui.blend_mode_first.add_choice("difference");
+    ui.blend_mode_first.add_choice("lighten");
+    ui.blend_mode_first.add_choice("darken");
+    ui.blend_mode_first.add_choice("dodge");
+    ui.blend_mode_first.add_choice("plus");
+    ui.blend_mode_first.add_choice("exclusion");
+
+    ui.blend_mode_second.add_choice("overlay");
+    ui.blend_mode_second.add_choice("over");
+    ui.blend_mode_second.add_choice("xor");
+    ui.blend_mode_second.add_choice("multiply");
+    ui.blend_mode_second.add_choice("burn");
+    ui.blend_mode_second.add_choice("soft_light");
+    ui.blend_mode_second.add_choice("hard_light");
+    ui.blend_mode_second.add_choice("difference");
+    ui.blend_mode_second.add_choice("lighten");
+    ui.blend_mode_second.add_choice("darken");
+    ui.blend_mode_second.add_choice("dodge");
+    ui.blend_mode_second.add_choice("plus");
+    ui.blend_mode_second.add_choice("exclusion");
+
     while app.wait() {
         if let Some(msg) = r.recv() {
             match msg {
+                Message::VegRemoveButton => {
+                    for item_number in 0..=ui.vegetation_list.nitems() {
+                        if ui.vegetation_list.checked(item_number as i32) {
+                            ui.vegetation_list.remove(item_number);
+                        }
+                    };
+                    ui.vegetation_list.redraw();
+                }
+                Message::VegSaveButton => {
+                    let mut nfc = dialog::NativeFileChooser::new(dialog::NativeFileChooserType::BrowseSaveFile);
+                    nfc.set_filter("VEG files\t*.veg");
+                    nfc.set_option(dialog::FileDialogOptions::SaveAsConfirm);
+                    nfc.show();
+                    let dir = nfc.filename();
+                    let final_name = dir.to_str().unwrap().to_string() + ".veg";
+                    if !dir.clone().to_str().unwrap().is_empty() {
+                        let s = ron::ser::to_string_pretty(&vegetation_master, PrettyConfig::default()).expect("Error serializing VEG file!");
+                        fs::write(final_name.as_str(), s).expect("Error saving VEG file!");
+                    }
+                }
+                Message::VegLoadButton => {
+                    let mut nfc = dialog::NativeFileChooser::new(dialog::NativeFileChooserType::BrowseFile);
+                    nfc.set_filter("VEG files\t*.veg");
+                    nfc.show();
+                    let dir = nfc.filename();
+                    if !dir.clone().into_os_string().is_empty() {
+                        let f = File::open(dir.clone()).expect("Error opening file.");
+                        let data: HashMap<String, Vegetation> = match from_reader(f) {
+                            Ok(x) => x,
+                            Err(e) => {
+                                println!("Failed to load file: {}", e);
+                                std::process::exit(1);
+                            }
+                        };
+                        vegetation_master = data;
+                    }
+                    ui.vegetation_list.clear();
+                    for item in vegetation_master.iter() {
+                        ui.vegetation_list.add(item.0.as_str(), false);
+                    }
+                    ui.vegetation_list.redraw();
+                }
+                Message::SoilLoadButton => {
+                    let mut nfc = dialog::NativeFileChooser::new(dialog::NativeFileChooserType::BrowseFile);
+                    nfc.set_filter("SOIL files\t*.soil");
+                    nfc.show();
+                    let dir = nfc.filename();
+                    if !dir.clone().into_os_string().is_empty() {
+                        let f = File::open(dir.clone()).expect("Error opening file.");
+                        let data: HashMap<String, Soil> = match from_reader(f) {
+                            Ok(x) => x,
+                            Err(e) => {
+                                println!("Failed to load file: {}", e);
+                                std::process::exit(1);
+                            }
+                        };
+                        for soil in data.clone() {
+                            if let Some(recorded_soil) = soil_master.clone().into_iter().next() {
+                                if soil.0 != recorded_soil.0 {
+                                    alert(0, 0, "Soil mismatch! You might want to check the soil demand on your vegetations and your current soil list.")
+                                } break
+                            }
+                        }
+                        soil_master = data;
+                    }
+                    ui.soil_browser.clear();
+                    for item in soil_master.iter() {
+                        ui.soil_browser.add(item.0.as_str(), false);
+                    }
+                    ui.soil_browser.redraw();
+                }
+                Message::SoilSaveButton => {
+                    let mut nfc = dialog::NativeFileChooser::new(dialog::NativeFileChooserType::BrowseSaveFile);
+                    nfc.set_filter("SOIL files\t*.soil");
+                    nfc.set_option(dialog::FileDialogOptions::SaveAsConfirm);
+                    nfc.show();
+                    let dir = nfc.filename();
+                    let final_name = dir.to_str().unwrap().to_string() + ".soil";
+                    if !dir.clone().to_str().unwrap().is_empty() {
+                        let s = ron::ser::to_string_pretty(&soil_master, PrettyConfig::default()).expect("Error serializing SOIL file!");
+                        fs::write(final_name.as_str(), s).expect("Error saving SOIL file!");
+                    }
+                }
+                Message::SoilRemoveButton => {
+                    for item_number in 0..=ui.soil_browser.nitems() {
+                        if ui.soil_browser.checked(item_number as i32) {
+                            ui.soil_browser.remove(item_number);
+                        }
+                    };
+                    ui.soil_browser.redraw();
+                }
+                Message::VegOKButton => {
+                    if veg_add_ui.vegetation_soil_choice.value().is_negative() {
+                        alert_default("Soil demand choice can't be null!");
+                    } else {
+                        vegetation_master.insert(veg_add_ui.vegetation_id_input.value().clone(),
+                                                 Vegetation {
+                                                     energy_demand: veg_add_ui.vegetation_energy_input.value(),
+                                                     water_demand: veg_add_ui.vegetation_water_input.value(),
+                                                     soil_demand: veg_add_ui.vegetation_soil_choice.choice().unwrap().to_string(),
+                                                     soil_depth_demand: veg_add_ui.vegetation_depth_input.value(),
+                                                 });
+                        ui.vegetation_list.add(veg_add_ui.vegetation_id_input.value().as_str(), false);
+                        veg_add_win.hide();
+                        ui.vegetation_list.redraw();
+                    }
+                    
+                }
+                Message::SoilOKButton => {
+                    soil_master.insert(soil_add_ui.soil_id_input.value().clone(), Soil {
+                        id: soil_add_ui.soil_red_input.value() as u8,
+                        albedo: soil_add_ui.soil_albedo_input.value(),
+                        water_absorption: soil_add_ui.soil_water_abs_input.value(),
+                    });
+                    ui.soil_browser.add(soil_add_ui.soil_id_input.value().as_str(), false);
+                    soil_add_win.hide();
+                    ui.soil_browser.redraw();
+                }
+                Message::AddVeg => {
+                    veg_add_win.show();
+                    veg_add_ui.vegetation_soil_choice.clear();
+                    for soil in soil_master.clone() {
+                        veg_add_ui.vegetation_soil_choice.add_choice(soil.0.as_str());
+                    }
+                }
+                Message::AddSoil => {
+                    soil_add_win.show();
+                }
                 Message::Vis2D => {
                     view_state.proj = ViewMode::TwoD;
-                    gl_widget.hide();
+                    // gl_widget.hide();
                 }
                 Message::Vis3D => {
                     view_state.proj = ViewMode::ThreeD;
-                    gl_widget.show();
+                    // gl_widget.show();
                 }
                 Message::NextVeg => {
                     if index >= index_list.len() {
@@ -821,110 +1025,17 @@ fn main() {
                 Message::GenVegSel => {
                     file.vegetation_maps.generated.clear();
                     index_list.clear();
-                    generate_selected_do(&mut ui.vegetation_list, &mut soil_veg_params, &mut file);
+                    generate_selected_do(&mut ui.vegetation_list, vegetation_master.clone(), soil_master.clone(), &mut file);
                     dbg!(file.vegetation_maps.generated.keys());
                     for element in file.vegetation_maps.clone().generated.into_iter() {
                         let name = element.0.clone();
                         index_list.push(name);
                     }
                 }
-                Message::DirtCheck => {
-                    match ui.dirt_check.is_checked() {
-                        true => {
-                            let value = soil_veg_params.blocklist.get_mut(&SoilType::Dirt).unwrap();
-                            replace(value, true);
-                        }
-                        false => {
-                            let value = soil_veg_params.blocklist.get_mut(&SoilType::Dirt).unwrap();
-                            replace(value, false);
-                        }
-                    }
-                }
-                Message::SiltCheck => {
-                    match ui.silt_check.is_checked() {
-                        true => {
-                            let value = soil_veg_params.blocklist.get_mut(&SoilType::Silt).unwrap();
-                            replace(value, true);
-                        }
-                        false => {
-                            let value = soil_veg_params.blocklist.get_mut(&SoilType::Silt).unwrap();
-                            replace(value, false);
-                        }
-                    }
-                }
-                Message::StoneCheck => {
-                    match ui.stone_check.is_checked() {
-                        true => {
-                            let value = soil_veg_params.blocklist.get_mut(&SoilType::Stone).unwrap();
-                            replace(value, true);
-                        }
-                        false => {
-                            let value = soil_veg_params.blocklist.get_mut(&SoilType::Stone).unwrap();
-                            replace(value, false);
-                        }
-                    }
-                }
-                Message::GravelCheck => {
-                    match ui.gravel_check.is_checked() {
-                        true => {
-                            let value = soil_veg_params.blocklist.get_mut(&SoilType::Gravel).unwrap();
-                            replace(value, true);
-                        }
-                        false => {
-                            let value = soil_veg_params.blocklist.get_mut(&SoilType::Gravel).unwrap();
-                            replace(value, false);
-                        }
-                    }
-                }
-                Message::LoamCheck => {
-                    match ui.loam_check.is_checked() {
-                        true => {
-                            let value = soil_veg_params.blocklist.get_mut(&SoilType::Loam).unwrap();
-                            replace(value, true);
-                        }
-                        false => {
-                            let value = soil_veg_params.blocklist.get_mut(&SoilType::Loam).unwrap();
-                            replace(value, false);
-                        }
-                    }
-                }
-                Message::ClayCheck => {
-                    match ui.clay_check.is_checked() {
-                        true => {
-                            let value = soil_veg_params.blocklist.get_mut(&SoilType::Clay).unwrap();
-                            replace(value, true);
-                        }
-                        false => {
-                            let value = soil_veg_params.blocklist.get_mut(&SoilType::Clay).unwrap();
-                            replace(value, false);
-                        }
-                    }
-                }
-                Message::SandCheck => {
-                    match ui.sand_check.is_checked() {
-                        true => {
-                            let value = soil_veg_params.blocklist.get_mut(&SoilType::Sand).unwrap();
-                            replace(value, true);
-                        }
-                        false => {
-                            let value = soil_veg_params.blocklist.get_mut(&SoilType::Sand).unwrap();
-                            replace(value, false);
-                        }
-                    }
-                }
+                
                 Message::GenSoil => {
-                    let soil_base = match ui.base_soil_choice.choice().unwrap().as_str() {
-                        "Dirt" => SoilType::Dirt,
-                        "Silt" => SoilType::Silt,
-                        "Stone" => SoilType::Stone,
-                        "Gravel" => SoilType::Gravel,
-                        "Loam" => SoilType::Loam,
-                        "Clay" => SoilType::Clay,
-                        "Sand" => SoilType::Sand,
-                        _ => SoilType::Dirt
-                    };
                     let i: ImageBuffer<Luma<u16>, Vec<u16>> = ImageBuffer::from_raw(8192, 8192, file.eroded_full.clone()).unwrap();
-                    let soil = init_soilmaker(&mut ui.soil_preview, soil_base, &soil_veg_params.blocklist, &i, file.topography.min_height, file.topography.max_height);
+                    let soil = init_soilmaker(ui.blend_mode_first.choice().unwrap().as_str(), ui.blend_mode_second.choice().unwrap().as_str(), &mut ui.soil_preview, soil_master.clone(), &i, file.topography.min_height, file.topography.max_height);
                     file.soil = soil;
 
                 }
@@ -960,7 +1071,7 @@ fn main() {
                     generate_terrain(&mut ui.preview_box_topo, &mut file);
                     println!("{:?}", file.topography)
                 }
-                Message::ExportMap => { export_do(&mut file) }
+                Message::ExportMap => { export_do(&mut file, &soil_master) }
                 Message::MinHeightInput => { file.topography.min_height = ui.min_height_input.value() as i32 }
                 Message::MaxHeightInput => { file.topography.max_height = ui.max_height_input.value() as i32 }
 
@@ -995,15 +1106,15 @@ fn main() {
                     hydro::update_hydro_prev(&mut ui.hydro_mask_preview, false, &mut file);
                 }
                 Message::TurnViewRight => {
-                    camera.rotate_around_with_fixed_up(&target, 300.0, 0.0);
-                    let camera_act_pos = Vec3::new(camera.position().x, camera_y, camera.position().z);
-                    camera.set_view(camera_act_pos, target, Vec3::new(0.0, 1.0, 0.0));
-                    // println!("pos: {:?}, target: {:?}, up: {:?}", camera.position(), camera.target(), camera.up());
+                    // camera.rotate_around_with_fixed_up(&target, 300.0, 0.0);
+                    // let camera_act_pos = Vec3::new(camera.position().x, camera_y, camera.position().z);
+                    // camera.set_view(camera_act_pos, target, Vec3::new(0.0, 1.0, 0.0));
+                    // // println!("pos: {:?}, target: {:?}, up: {:?}", camera.position(), camera.target(), camera.up());
                 }
                 Message::TurnViewLeft => {
-                    camera.rotate_around_with_fixed_up(&target, -300.0, 0.0);
-                    let camera_act_pos = Vec3::new(camera.position().x, camera_y, camera.position().z);
-                    camera.set_view(camera_act_pos, target, Vec3::new(0.0, 1.0, 0.0));
+                    // camera.rotate_around_with_fixed_up(&target, -300.0, 0.0);
+                    // let camera_act_pos = Vec3::new(camera.position().x, camera_y, camera.position().z);
+                    // camera.set_view(camera_act_pos, target, Vec3::new(0.0, 1.0, 0.0));
                 }
                 Message::Layer => {
                     match ui.layer_slider.value() as u8 {
@@ -1017,7 +1128,7 @@ fn main() {
                         _ => view_state.layer = 0
                     }
                     match view_state.proj {
-                        ViewMode::ThreeD => {weather_pane::update_grid_at_time(view_state.hour, & mut file.weather_data, & mut mesh_v, & view_state);},
+                        ViewMode::ThreeD => {},
                         ViewMode::TwoD => {
                             weather_pane::vis_image( &mut ui.weather_preview, view_state.hour, & mut file.weather_data, & view_state);
                         }
@@ -1042,22 +1153,22 @@ fn main() {
                 Message::GenWeather => {
                     let noise: Fbm<Perlin> = Fbm::new(file.weather.seed.unwrap());
                     let map: ImageBuffer<Luma<u16>, Vec<u16>> = ImageBuffer::from_raw(512, 512, file.eroded_raw_512.clone()).unwrap();
-                    if view_state.proj != ViewMode::TwoD {
-                        let map_b = map.clone();
-                        let terrain_map = Terrain::new(
-                            &context,
-                            terrain_material.clone(),
-                            Arc::new(
-                                move |x, y| {
-                                    *map_b.clone().get_pixel(x as u32, y as u32).channels().first().unwrap() as f32 * 0.01
-                                }
-                            ),
-                            512.0,
-                            1.0,
-                            three_d::prelude::Vec2::new(255.0, 255.0),
-                        );
-                        terrain = terrain_map;
-                    }
+                    // if view_state.proj != ViewMode::TwoD {
+                    //     let map_b = map.clone();
+                    //     let terrain_map = Terrain::new(
+                    //         &context,
+                    //         terrain_material.clone(),
+                    //         Arc::new(
+                    //             move |x, y| {
+                    //                 *map_b.clone().get_pixel(x as u32, y as u32).channels().first().unwrap() as f32 * 0.01
+                    //             }
+                    //         ),
+                    //         512.0,
+                    //         1.0,
+                    //         three_d::prelude::Vec2::new(255.0, 255.0),
+                    //     );
+                    //     terrain = terrain_map;
+                    // }
                     let component_size = 512.0 / file.weather.clone().grid_size as f64;
                     let min_total = map.iter().as_slice().iter().min().unwrap();
                     let max_total = map.iter().as_slice().iter().max().unwrap();
@@ -1087,7 +1198,7 @@ fn main() {
                 Message::ViewHumidity => {
                     weather_pane::set_view_state(&mut view_state, WeatherVisualization::Humidity);
                     match view_state.proj {
-                        ViewMode::ThreeD => { weather_pane::update_grid_at_time(view_state.hour, &mut file.weather_data, &mut mesh_v, &view_state); },
+                        ViewMode::ThreeD => {},
                         ViewMode::TwoD => { weather_pane::vis_image(&mut ui.weather_preview, view_state.hour, &mut file.weather_data, &view_state); }
                     }
                     ui.legend_box.set_image(Some(SharedImage::load("icons/humidity_legend.png").unwrap()));
@@ -1096,7 +1207,7 @@ fn main() {
                 Message::ViewPressure => {
                     weather_pane::set_view_state(&mut view_state, WeatherVisualization::Pressure);
                     match view_state.proj {
-                        ViewMode::ThreeD => { weather_pane::update_grid_at_time(view_state.hour, &mut file.weather_data, &mut mesh_v, &view_state); },
+                        ViewMode::ThreeD => {},
                         ViewMode::TwoD => { weather_pane::vis_image(&mut ui.weather_preview, view_state.hour, &mut file.weather_data, &view_state); }
                     }
                     ui.legend_box.set_image(Some(SharedImage::load("icons/pressure_legend.png").unwrap()));
@@ -1105,7 +1216,7 @@ fn main() {
                 Message::ViewTemperature => {
                     weather_pane::set_view_state(&mut view_state, WeatherVisualization::Temperature);
                     match view_state.proj {
-                        ViewMode::ThreeD => { weather_pane::update_grid_at_time(view_state.hour, &mut file.weather_data, &mut mesh_v, &view_state); },
+                        ViewMode::ThreeD => {},
                         ViewMode::TwoD => { weather_pane::vis_image(&mut ui.weather_preview, view_state.hour, &mut file.weather_data, &view_state); }
                     }
                     ui.legend_box.set_image(Some(SharedImage::load("icons/temp_legend.png").unwrap()));
@@ -1114,14 +1225,14 @@ fn main() {
                 Message::ViewWind => {
                     weather_pane::set_view_state(&mut view_state, WeatherVisualization::Wind);
                     match view_state.proj {
-                        ViewMode::ThreeD => { weather_pane::update_grid_at_time(view_state.hour, &mut file.weather_data, &mut mesh_v, &view_state); },
+                        ViewMode::ThreeD => {},
                         ViewMode::TwoD => { weather_pane::vis_image(&mut ui.weather_preview, view_state.hour, &mut file.weather_data, &view_state); }
                     };
                 },
                 Message::DaySlider => {
                     weather_pane::set_hour(&mut ui.day_vis_slider, &mut view_state);
                     match view_state.proj {
-                        ViewMode::ThreeD => { weather_pane::update_grid_at_time(view_state.hour, &mut file.weather_data, &mut mesh_v, &view_state); },
+                        ViewMode::ThreeD => {},
                         ViewMode::TwoD => { weather_pane::vis_image(&mut ui.weather_preview, view_state.hour, &mut file.weather_data, &view_state); }
                     };
                 }
@@ -1211,21 +1322,21 @@ fn main() {
                     ui.grid_size_input.set_value(format!("{}", &file.weather.grid_size.clone()).as_str());
                     ui.grid_size_input.redraw();
 
-                    let map: ImageBuffer<Luma<u16>, Vec<u16>> = ImageBuffer::from_raw(512, 512, file.eroded_raw_512.clone()).unwrap();
-                    let map_b = map.clone();
-                    let terrain_map = Terrain::new(
-                        &context,
-                        terrain_material.clone(),
-                        Arc::new(
-                            move |x, y| {
-                                *map_b.clone().get_pixel(x as u32, y as u32).channels().first().unwrap() as f32 * 0.01
-                            }
-                        ),
-                        512.0,
-                        1.0,
-                        three_d::prelude::Vec2::new(255.0, 255.0)
-                    );
-                    terrain = terrain_map;
+                    // let map: ImageBuffer<Luma<u16>, Vec<u16>> = ImageBuffer::from_raw(512, 512, file.eroded_raw_512.clone()).unwrap();
+                    // let map_b = map.clone();
+                    // let terrain_map = Terrain::new(
+                    //     &context,
+                    //     terrain_material.clone(),
+                    //     Arc::new(
+                    //         move |x, y| {
+                    //             *map_b.clone().get_pixel(x as u32, y as u32).channels().first().unwrap() as f32 * 0.01
+                    //         }
+                    //     ),
+                    //     512.0,
+                    //     1.0,
+                    //     three_d::prelude::Vec2::new(255.0, 255.0)
+                    // );
+                    // terrain = terrain_map;
                 }
                 Message::BrowseFile => {
                     let mut nfc = dialog::NativeFileChooser::new(dialog::NativeFileChooserType::BrowseFile);
@@ -1271,21 +1382,21 @@ fn main() {
                 }
             }
         }
-        {
-            gl_widget.make_current();
-            context.set_viewport(viewport);
-            let rt = RenderTarget::screen(&context, viewport.width, viewport.height);
-            rt
-                // Clear color and depth of the render target
-                .clear(ClearState::color_and_depth(0.8, 0.8, 0.8, 1.0, 1.0))
-                // Render the triangle with the per vertex colors defined at construction
-                .render(&camera, &terrain, &[&directional, &ambient]);
-            rt.render(&camera, &mesh_v, &[&directional, &ambient]);
-
-            frame += 1;
-            // app::sleep(0.10);
-            gl_widget.redraw();
-        }
+        // {
+        //     gl_widget.make_current();
+        //     context.set_viewport(viewport);
+        //     let rt = RenderTarget::screen(&context, viewport.width, viewport.height);
+        //     rt
+        //         // Clear color and depth of the render target
+        //         .clear(ClearState::color_and_depth(0.8, 0.8, 0.8, 1.0, 1.0))
+        //         // Render the triangle with the per vertex colors defined at construction
+        //         .render(&camera, &terrain, &[&directional, &ambient]);
+        //     rt.render(&camera, &mesh_v, &[&directional, &ambient]);
+        // 
+        //     frame += 1;
+        //     // app::sleep(0.10);
+        //     gl_widget.redraw();
+        // }
     }
 }
 

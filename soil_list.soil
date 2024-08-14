@@ -1,0 +1,72 @@
+{
+    "Peat": (
+        id: 40,
+        albedo: 0.12,
+        water_absorption: 0.5,
+    ),
+    "Chalk2": (
+        id: 120,
+        albedo: 0.0,
+        water_absorption: 0.0,
+    ),
+    "Silt": (
+        id: 30,
+        albedo: 0.25,
+        water_absorption: 0.4,
+    ),
+    "Stone3": (
+        id: 160,
+        albedo: 0.0,
+        water_absorption: 0.0,
+    ),
+    "Gravel2": (
+        id: 180,
+        albedo: 0.0,
+        water_absorption: 0.0,
+    ),
+    "Chalk": (
+        id: 100,
+        albedo: 0.4,
+        water_absorption: 0.1,
+    ),
+    "Gravel": (
+        id: 235,
+        albedo: 0.27,
+        water_absorption: 0.2,
+    ),
+    "Clay": (
+        id: 80,
+        albedo: 0.3,
+        water_absorption: 0.42,
+    ),
+    "Sand": (
+        id: 10,
+        albedo: 0.18,
+        water_absorption: 0.08,
+    ),
+    "Stone": (
+        id: 255,
+        albedo: 0.275,
+        water_absorption: 0.28,
+    ),
+    "Wildcard": (
+        id: 0,
+        albedo: 0.0,
+        water_absorption: 0.4,
+    ),
+    "Stone2": (
+        id: 140,
+        albedo: 0.0,
+        water_absorption: 0.0,
+    ),
+    "Loam": (
+        id: 64,
+        albedo: 0.25,
+        water_absorption: 0.43,
+    ),
+    "Dirt": (
+        id: 60,
+        albedo: 0.25,
+        water_absorption: 0.38,
+    ),
+}

@@ -18,7 +18,11 @@ pub enum SoilType {
     Loam,
     Clay,
     Sand,
-    Gravel
+    Gravel,
+    Placeholder1,
+    Placeholder2,
+    Placeholder3,
+    Placeholder4,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -43,8 +47,13 @@ pub struct VegetationCollection {
     pub generated: HashMap<String, Vec<u8>>
 }
 
-pub fn generate_selected_do(c: &mut CheckBrowser, vegdata: &mut VegetationData, filedata: &mut FileData) {
-    collect_values(c, vegdata);
+pub fn generate_selected_do(c: &mut CheckBrowser, veglist: HashMap<String, Vegetation>, soils: HashMap<String, Soil>, filedata: &mut FileData) {
+    let mut to_be_generated: Vec<String> = vec![];
+    for item in 0..=c.nitems() {
+        if c.checked(item as i32) {
+            to_be_generated.push(c.text(item as i32).unwrap());
+        }
+    }
     let h: ImageBuffer<Luma<u16>, Vec<u16>> = ImageBuffer::from_raw(8192, 8192, filedata.eroded_full.clone()).unwrap();
     let h = image_old::imageops::resize(&h, 512, 512, FilterType::CatmullRom);
     let h = GreyscaleImage::new(h.into_raw().into_iter()
@@ -63,29 +72,18 @@ pub fn generate_selected_do(c: &mut CheckBrowser, vegdata: &mut VegetationData, 
     let mut data = String::new();
     File::open("bioms.yml").unwrap().read_to_string(&mut data).unwrap();
     let bioms: HashMap<String, Biom> = serde_yaml::from_str(&data).unwrap();
-    let mut data = String::new();
-    File::open("soil_types.yml").unwrap().read_to_string(&mut data).unwrap();
-    let soils: HashMap<String, Soil> = serde_yaml::from_str(&data).unwrap();
-    let mut data = String::new();
-    File::open("vegetation_types.yaml")
-        .unwrap()
-        .read_to_string(&mut data)
-        .unwrap();
-    let vegetations: HashMap<String, Vegetation> = serde_yaml::from_str(&data).unwrap();
+    // File::open("vegetation_types.yaml")
+    //     .unwrap()
+    //     .read_to_string(&mut data)
+    //     .unwrap();
     let sun_config = SunConfig { // sample parameters for Hellion
         daylight_hours: 13,
         sun_start_elevation: -5.0,
         sun_start_azimuth: 92.0,
         sun_max_elevation: 50.0,
     };
-    let sim_config = SimConfig::from_configs(m, bioms, soils, vegetations);
-    let mut to_be_generated: Vec<&str> = Vec::new();
-    for (vegetation, status) in &vegdata.vegetationlist {
-        if *status {
-            to_be_generated.push(vegetation.as_str());
-        }
-    }
-    dbg!(&vegdata.vegetationlist);
+    let sim_config = SimConfig::from_configs(m, bioms, soils, veglist);
+    
     let reflection_coefficient = 0.1;
     
     if filedata.datamaps.insolation.image.is_empty() {
@@ -93,34 +91,4 @@ pub fn generate_selected_do(c: &mut CheckBrowser, vegdata: &mut VegetationData, 
     }
     
     sim_config.calculate_probabilities(&mut filedata.datamaps, to_be_generated.as_slice(), sun_config.daylight_hours, &mut filedata.vegetation_maps);
-}
-
-pub fn collect_values(w: &mut CheckBrowser, data: &mut VegetationData) {
-    data.vegetationlist.clear();
-    let nitems = w.nitems();
-    for i in 0..nitems {
-        data.vegetationlist.insert(w.text((i + 1) as i32).unwrap(), w.checked((i+1) as i32));
-    }
-}
-
-pub fn base_choice_init(w: &mut impl MenuExt) {
-    w.add_choice("Dirt");
-    w.add_choice("Loam");
-    w.add_choice("Silt");
-    w.add_choice("Clay");
-    w.add_choice("Stone");
-    w.add_choice("Sand");
-    w.add_choice("Gravel");
-}
-
-pub fn load_and_show_veg(w: &mut CheckBrowser) {
-    let mut data = String::new();
-    File::open("vegetation_types.yaml")
-        .unwrap()
-        .read_to_string(&mut data)
-        .unwrap();
-    let vegetations: HashMap<String, Vegetation> = serde_yaml::from_str(&data).unwrap();
-    for vegetation in vegetations.iter() {
-        w.add(vegetation.0.clone().as_str(), false);
-    }
 }

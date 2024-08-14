@@ -63,14 +63,14 @@ pub struct Biom {
     pub groundwater: f64,            // in l/cm²
 }
 
-#[derive(Deserialize)]
+#[derive(Copy, Clone, Serialize, Deserialize, Debug)]
 pub struct Soil {
     pub id: u8,
     pub albedo: f64,
     pub water_absorption: f64,
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Vegetation {
     pub energy_demand: f64,
     pub water_demand: f64,
@@ -220,13 +220,12 @@ impl SimConfig {
     // TODO: HACER STRUCT SOLO PARA ESTAS IMAGENES Y NO TENER QUE GUARDARLAS
     // TODO: COMPROBAR EL TEMA IMAGEN SI LO COGE BIEN O NO
     // TODO: TERMINAR DE CONFIGURAR SOIL_DEF.RS
-    pub fn calculate_probabilities(&self, mapdata: &mut VegetationMaps, vegetation_names: &[&str], _daylight_hours: i32, vegetation_collection: &mut VegetationCollection) {
+    pub fn calculate_probabilities(&self, mapdata: &mut VegetationMaps, vegetation_names: &[String], _daylight_hours: i32, vegetation_collection: &mut VegetationCollection) {
         let soil_ids_map = GreyscaleImage::new(self.maps.texture_map_path.clone());
         let x: ImageBuffer<Luma<u8>, Vec<u8>> = ImageBuffer::from_raw(512, 512, self.maps.texture_map_path.clone()).unwrap();
-        x.save("soil_veg_test.png");
         for vegetation in vegetation_names {
             let probabilities_map = calculate_probabilities(
-                &self.vegetations[*vegetation],
+                &self.vegetations[vegetation],
                 &soil_ids_map,
                 &self.soil_names,
                 &mapdata.insolation,

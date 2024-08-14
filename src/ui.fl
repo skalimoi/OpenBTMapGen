@@ -8,7 +8,7 @@ class UserInterface {open
   } {
     Fl_Window main_window {
       label {OpenBattlesim Map Generator} open
-      xywh {306 248 870 579} type Single color 55 hide
+      xywh {904 105 870 579} type Single color 55 visible
     } {
       Fl_Menu_Bar menu_bar {open
         xywh {-1 0 870 30} color 55
@@ -248,16 +248,12 @@ class UserInterface {open
           }
         }
         Fl_Group soil_pane {
-          label Soil open selected
-          xywh {0 60 870 520} color 7
+          label Soil open
+          xywh {0 60 875 520} color 7
         } {
           Fl_Group {} {open
-            xywh {0 60 870 520}
+            xywh {0 60 875 520}
           } {
-            Fl_Box {} {
-              label Soil
-              xywh {592 62 45 23} box FLAT_BOX color 53 selection_color 54
-            }
             Fl_Button generate_selected_button {
               label {Generate selected}
               xywh {290 537 265 25}
@@ -266,15 +262,12 @@ class UserInterface {open
               label {Note: Only 1 vegetation map can be displayed at a time.}
               xywh {290 483 265 41} box FLAT_BOX align 128
             }
-            Fl_Box {} {
-              label {Loaded vegetation definitions:}
-              xywh {595 336 190 22}
-            }
             Fl_Box legend_box_soil {
               xywh {290 81 145 229}
             }
             Fl_Check_Browser vegetation_list {
-              xywh {595 360 265 205}
+              label {Vegetation types}
+              xywh {595 260 265 204} align 5
             }
             Fl_Box veg_name {
               label {Now displaying: []}
@@ -296,72 +289,143 @@ class UserInterface {open
                 xywh {15 339 230 230}
               }
             }
+            Fl_Button add_veg_button {
+              label {Add vegetation...}
+              xywh {595 474 124 38}
+            }
+            Fl_Button load_veg_button {
+              label {Load vegetation list...}
+              xywh {595 524 124 38} align 128
+            }
+            Fl_Button save_veg_list_button {
+              label {Save vegetation list...}
+              xywh {730 524 124 38} align 128
+            }
+            Fl_Button remove_veg_button {
+              label {Remove vegetation...}
+              xywh {730 474 125 36} align 128
+            }
           }
           Fl_Group soil_opts_group {open
-            xywh {595 70 265 260} box BORDER_FRAME color 35
+            xywh {595 70 265 165} box BORDER_FRAME color 35
           } {
-            Fl_Choice base_soil_choice {
-              label {Base soil:} open
-              xywh {705 95 110 25} down_box BORDER_BOX
-            } {}
-            Fl_Box {} {
-              label {Don't generate:}
-              xywh {640 135 100 22}
-            }
-            Fl_Check_Button dirt_check {
-              label {Dirt  }
-              xywh {670 165 20 20} down_box DOWN_BOX align 4
-            }
-            Fl_Check_Button loam_check {
-              label {Loam  }
-              xywh {795 165 20 20} down_box DOWN_BOX align 4
-            }
-            Fl_Check_Button silt_check {
-              label {Silt  }
-              xywh {670 195 20 20} down_box DOWN_BOX align 4
-            }
-            Fl_Check_Button stone_check {
-              label Stone
-              xywh {670 225 20 20} down_box DOWN_BOX align 4
-            }
-            Fl_Check_Button sand_check {
-              label Sand
-              xywh {795 225 20 20} down_box DOWN_BOX align 4
-            }
-            Fl_Check_Button gravel_check {
-              label Gravel
-              xywh {795 254 20 20} down_box DOWN_BOX align 4
-            }
-            Fl_Check_Button clay_check {
-              label {Clay  }
-              xywh {795 195 20 20} down_box DOWN_BOX align 4
-            }
             Fl_Button prepare_soil_button {
-              label {Prepare soil map}
-              xywh {640 288 176 25}
+              label {Generate soil map}
+              xywh {640 190 176 25}
             }
+            Fl_Choice blend_mode_first {
+              label {Blend mode 1:} open
+              xywh {711 101 128 25} down_box BORDER_BOX
+            } {}
+            Fl_Choice blend_mode_second {
+              label {Blend mode 2:} open
+              xywh {710 142 128 25} down_box BORDER_BOX
+            } {}
           }
           Fl_Button next_veg {
             label Next
             xywh {355 415 130 25}
           }
-          Fl_Output soil_output {
-            label Output
-            xywh {290 90 265 310} align 1
+          Fl_Group soil_opts_group_2 {open
+            xywh {321 71 265 254} box BORDER_FRAME color 35
+          } {
+            Fl_Button add_soil_button {
+              label {Add soil...}
+              xywh {334 244 115 25}
+            }
+            Fl_Button remove_soil_button {
+              label {Remove soil...}
+              xywh {459 244 115 25}
+            }
+            Fl_Button save_soil_button {
+              label {Save soil list...}
+              xywh {460 285 115 25}
+            }
+            Fl_Button load_soil_button {
+              label {Load soil list...}
+              xywh {335 285 115 25}
+            }
+            Fl_Check_Browser soil_browser {
+              label {Soil types} selected
+              xywh {335 100 240 125} align 5
+            }
           }
         }
       }
     }
-    comment {En el preview pane un panel de zoom, otro abajo con x e y y cosas como value} {in_source in_header
+  }
+  class VegetationInterface {open
+  } {
+    Function {vegetation_dialog()} {open
+    } {
+      Fl_Window vegetation_dialog_win {
+        label {New vegetation definition} open
+        xywh {112 135 228 306} type Double color 55 visible
+      } {
+        Fl_Input vegetation_id_input {
+          label {Name / ID: }
+          xywh {115 17 96 30}
+        }
+        Fl_Value_Input vegetation_depth_input {
+          label {Depth demand: }
+          xywh {115 148 97 30}
+        }
+        Fl_Value_Input vegetation_energy_input {
+          label {Energy demand: }
+          xywh {115 60 97 30}
+        }
+        Fl_Value_Input vegetation_water_input {
+          label {Water demand: }
+          xywh {115 191 97 30}
+        }
+        Fl_Choice vegetation_soil_choice {
+          label {Soil demand:} open
+          xywh {115 104 97 30} down_box BORDER_BOX
+        } {}
+        Fl_Button vegetation_ok_button {
+          label OK
+          xywh {60 234 105 26}
+        }
+      }
     }
   }
-  class HeightmapInterface {open
+  class SoilInterface {open
   } {
+    Function {soil_dialog()} {open
+    } {
+      Fl_Window soil_dialog_win {
+        label {New soil} open
+        xywh {160 427 232 235} type Double color 55 visible
+      } {
+        Fl_Button soil_ok_button {
+          label OK
+          xywh {60 192 105 26}
+        }
+        Fl_Input soil_id_input {
+          label {Name:}
+          xywh {115 17 96 30}
+        }
+        Fl_Value_Input soil_albedo_input {
+          label {Albedo:}
+          xywh {115 106 97 30}
+        }
+        Fl_Value_Input soil_red_input {
+          label {Red value:}
+          xywh {115 61 97 30}
+        }
+        Fl_Value_Input soil_water_abs_input {
+          label {Water absorption: }
+          xywh {130 149 82 30}
+        }
+      }
+    }
+  }
+  class HeightmapInterface {} {
     Function {heightmap_dialog()} {open
     } {
       Fl_Window heightmap_dialog_win {
         label {Heightmap importer} open
-        xywh {1487 580 425 114} type Single color 55 hide
+        xywh {1281 341 425 114} type Single color 55 visible
       } {
         Fl_Button import_button {
           label Import
